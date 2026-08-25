@@ -14,7 +14,210 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      daily_metrics: {
+        Row: {
+          created_at: string
+          creatine_g: number | null
+          creatine_taken: boolean
+          id: string
+          metric_date: string
+          notes: string | null
+          sleep_hours: number | null
+          updated_at: string
+          user_id: string
+          waist_cm: number | null
+          water_ml: number | null
+          weight_kg: number | null
+          workout_minutes: number | null
+          workout_type: string | null
+        }
+        Insert: {
+          created_at?: string
+          creatine_g?: number | null
+          creatine_taken?: boolean
+          id?: string
+          metric_date?: string
+          notes?: string | null
+          sleep_hours?: number | null
+          updated_at?: string
+          user_id: string
+          waist_cm?: number | null
+          water_ml?: number | null
+          weight_kg?: number | null
+          workout_minutes?: number | null
+          workout_type?: string | null
+        }
+        Update: {
+          created_at?: string
+          creatine_g?: number | null
+          creatine_taken?: boolean
+          id?: string
+          metric_date?: string
+          notes?: string | null
+          sleep_hours?: number | null
+          updated_at?: string
+          user_id?: string
+          waist_cm?: number | null
+          water_ml?: number | null
+          weight_kg?: number | null
+          workout_minutes?: number | null
+          workout_type?: string | null
+        }
+        Relationships: []
+      }
+      goals: {
+        Row: {
+          calorie_target: number
+          carb_target_g: number
+          created_at: string
+          creatine_target_g: number
+          fat_target_g: number
+          goal_type: string
+          id: string
+          is_active: boolean
+          protein_target_g: number
+          sleep_target_hours: number
+          target_weight_kg: number
+          updated_at: string
+          user_id: string
+          water_target_ml: number
+          workout_days_per_week: number
+        }
+        Insert: {
+          calorie_target?: number
+          carb_target_g?: number
+          created_at?: string
+          creatine_target_g?: number
+          fat_target_g?: number
+          goal_type?: string
+          id?: string
+          is_active?: boolean
+          protein_target_g?: number
+          sleep_target_hours?: number
+          target_weight_kg?: number
+          updated_at?: string
+          user_id: string
+          water_target_ml?: number
+          workout_days_per_week?: number
+        }
+        Update: {
+          calorie_target?: number
+          carb_target_g?: number
+          created_at?: string
+          creatine_target_g?: number
+          fat_target_g?: number
+          goal_type?: string
+          id?: string
+          is_active?: boolean
+          protein_target_g?: number
+          sleep_target_hours?: number
+          target_weight_kg?: number
+          updated_at?: string
+          user_id?: string
+          water_target_ml?: number
+          workout_days_per_week?: number
+        }
+        Relationships: []
+      }
+      meals: {
+        Row: {
+          calories: number
+          carbs_g: number
+          category: string
+          created_at: string
+          eaten_at: string
+          estimate_source: string | null
+          fat_g: number
+          id: string
+          is_demo: boolean
+          is_estimate: boolean
+          name: string
+          notes: string | null
+          photo_path: string | null
+          protein_g: number
+          serving_amount: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          calories?: number
+          carbs_g?: number
+          category?: string
+          created_at?: string
+          eaten_at?: string
+          estimate_source?: string | null
+          fat_g?: number
+          id?: string
+          is_demo?: boolean
+          is_estimate?: boolean
+          name: string
+          notes?: string | null
+          photo_path?: string | null
+          protein_g?: number
+          serving_amount?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          calories?: number
+          carbs_g?: number
+          category?: string
+          created_at?: string
+          eaten_at?: string
+          estimate_source?: string | null
+          fat_g?: number
+          id?: string
+          is_demo?: boolean
+          is_estimate?: boolean
+          name?: string
+          notes?: string | null
+          photo_path?: string | null
+          protein_g?: number
+          serving_amount?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          age: number | null
+          created_at: string
+          display_name: string | null
+          goal_weight_kg: number | null
+          height_cm: number | null
+          id: string
+          onboarded: boolean
+          sex: string | null
+          start_weight_kg: number | null
+          updated_at: string
+        }
+        Insert: {
+          age?: number | null
+          created_at?: string
+          display_name?: string | null
+          goal_weight_kg?: number | null
+          height_cm?: number | null
+          id: string
+          onboarded?: boolean
+          sex?: string | null
+          start_weight_kg?: number | null
+          updated_at?: string
+        }
+        Update: {
+          age?: number | null
+          created_at?: string
+          display_name?: string | null
+          goal_weight_kg?: number | null
+          height_cm?: number | null
+          id?: string
+          onboarded?: boolean
+          sex?: string | null
+          start_weight_kg?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
