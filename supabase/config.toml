@@ -1,1 +1,6 @@
 project_id = "spcnwgkzeopmztmygmhx"
+
+# Photo food estimator — called from the browser by both signed-in and guest
+# users, so it must not require a Supabase JWT.
+[functions.analyze-food]
+verify_jwt = false

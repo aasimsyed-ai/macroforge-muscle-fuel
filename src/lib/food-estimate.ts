@@ -283,9 +283,9 @@ export const referenceAnalyzer: FoodAnalyzer = {
 };
 
 /**
- * Optional vision analyzer slot. Wire a real AI food-analysis API here later:
- *
- *   setVisionAnalyzer({ id: "vision_ai", analyze: (input) => callServerFn(input) })
+ * Optional extra vision analyzer slot (e.g. injected in tests). The built-in
+ * Gemini path below is used automatically when the `analyze-food` edge function
+ * is deployed.
  */
 let visionAnalyzer: FoodAnalyzer | null = null;
 
@@ -297,14 +297,76 @@ export function hasVisionAnalyzer(): boolean {
   return visionAnalyzer !== null;
 }
 
+const SUPABASE_URL: string =
+  (typeof import.meta !== "undefined" && import.meta.env && import.meta.env["VITE_SUPABASE_URL"]) || "";
+const SUPABASE_KEY: string =
+  (typeof import.meta !== "undefined" && import.meta.env && import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"]) || "";
+
+function fileToBase64(file: File): Promise<{ data: string; mimeType: string }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result);
+      const comma = result.indexOf(",");
+      resolve({
+        data: comma >= 0 ? result.slice(comma + 1) : result,
+        mimeType: file.type || "image/jpeg",
+      });
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("read failed"));
+    reader.readAsDataURL(file);
+  });
+}
+
+/** Calls the `analyze-food` Gemini edge function. Returns null if unavailable. */
+async function analyzeWithGemini(input: AnalyzeInput): Promise<MacroEstimate | null> {
+  if (!input.photo || !SUPABASE_URL || typeof FileReader === "undefined") return null;
+  try {
+    const { data, mimeType } = await fileToBase64(input.photo);
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/analyze-food`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+      },
+      body: JSON.stringify({
+        imageBase64: data,
+        mimeType,
+        description: input.description ?? "",
+        grams: input.grams ?? null,
+      }),
+    });
+    if (!res.ok) return null;
+    const j = (await res.json()) as Partial<MacroEstimate> & { error?: string };
+    if (j.error || typeof j.calories !== "number") return null;
+    return {
+      calories: j.calories,
+      protein: Number(j.protein) || 0,
+      carbs: Number(j.carbs) || 0,
+      fat: Number(j.fat) || 0,
+      confidence: typeof j.confidence === "number" ? j.confidence : 0.45,
+      source: "vision_ai",
+      matchedFood: j.matchedFood ?? "meal from photo",
+      note: j.note ?? "AI photo estimate — approximate, please check the numbers before saving.",
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function analyzeMeal(input: AnalyzeInput): Promise<MacroEstimate | null> {
   if (visionAnalyzer && input.photo) {
     try {
       const result = await visionAnalyzer.analyze(input);
       if (result) return result;
     } catch {
-      // fall through to the local estimator
+      // fall through
     }
+  }
+  if (input.photo) {
+    const vision = await analyzeWithGemini(input);
+    if (vision) return vision;
   }
   return referenceAnalyzer.analyze(input);
 }

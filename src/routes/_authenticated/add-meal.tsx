@@ -155,7 +155,13 @@ function AddMeal() {
     setPhoto(file);
     if (photoUrl) URL.revokeObjectURL(photoUrl);
     setPhotoUrl(file ? URL.createObjectURL(file) : null);
-    if (file) setExistingPhotoPath(null);
+    if (file) {
+      setExistingPhotoPath(null);
+      if (isEdit && !descEdited) {
+        setDescEdited(true);
+        setTouched(NO_MACROS_TOUCHED);
+      }
+    }
   }
 
   function applyTemplate(t: MealTemplate) {
@@ -384,9 +390,9 @@ function AddMeal() {
             {estimating ? "Estimating…" : estimate ? "Re-estimate calories & macros" : "Estimate calories & macros"}
           </Button>
           <p className="mt-3 rounded-lg bg-secondary p-3 text-xs text-muted-foreground">
-            Calories and macros fill in <strong>automatically</strong> from your food name and serving size. They are{" "}
-            <strong>approximate</strong>, not measured values — edit any number and your value is kept. Separate several
-            foods with <strong>+</strong> and each is added up. Use <em>Re-estimate</em> to recalculate.
+            Calories and macros fill in <strong>automatically</strong> from your food name and serving size — or from a{" "}
+            <strong>photo</strong> when photo analysis is enabled. They are <strong>approximate</strong>, not measured —
+            edit any number and your value is kept. Separate several foods with <strong>+</strong> and each is added up.
           </p>
           {estimate ? (
             <p className="mt-2 text-xs text-primary">
