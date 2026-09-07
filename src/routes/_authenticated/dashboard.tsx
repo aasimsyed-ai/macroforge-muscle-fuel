@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { endOfDay, format, startOfDay } from "date-fns";
+import { format } from "date-fns";
 import { Download, Droplets, Dumbbell, Moon, Pill, Scale, Ruler } from "lucide-react";
 import { z } from "zod";
 
@@ -58,16 +58,25 @@ function Dashboard() {
   const profile = useProfile();
   const goalsQuery = useGoals();
   const rangeMeals = useMeals(range.from, range.to);
-  const todayMeals = useMeals(startOfDay(new Date()), endOfDay(new Date()));
   const rangeMetrics = useMetrics(range.from, range.to);
   const allMetrics = useAllMetrics();
 
   const goals = goalsQuery.data;
-  const loading = goalsQuery.isLoading || rangeMeals.isLoading || todayMeals.isLoading;
+  const loading = goalsQuery.isLoading || rangeMeals.isLoading;
 
   const rangeTotals = sumMeals(rangeMeals.data);
-  const todayTotals = sumMeals(todayMeals.data);
   const days = Math.max(1, range.days);
+  const isSingleDay = days <= 1;
+  // For a single day the rings show that day's totals; for a multi-day range
+  // they show the daily average, so the section always reflects the selection.
+  const progress = isSingleDay
+    ? { calories: rangeTotals.calories, protein: rangeTotals.protein, carbs: rangeTotals.carbs, fat: rangeTotals.fat }
+    : {
+        calories: rangeTotals.calories / days,
+        protein: rangeTotals.protein / days,
+        carbs: rangeTotals.carbs / days,
+        fat: rangeTotals.fat / days,
+      };
 
   const metrics = rangeMetrics.data ?? [];
   const todayKey = format(new Date(), "yyyy-MM-dd");
@@ -121,8 +130,8 @@ function Dashboard() {
     );
   }
 
-  const remainingKcal = Math.max(0, goals.calorie_target - todayTotals.calories);
-  const remainingProtein = Math.max(0, goals.protein_target_g - todayTotals.protein);
+  const remainingKcal = Math.max(0, goals.calorie_target - progress.calories);
+  const remainingProtein = Math.max(0, goals.protein_target_g - progress.protein);
 
   return (
     <AppShell
@@ -169,18 +178,22 @@ function Dashboard() {
         </Button>
       </div>
 
-      <section className="panel mt-5 p-4" aria-label="Today's goal progress">
+      <section className="panel mt-5 p-4" aria-label="Goal progress">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <p className="text-sm font-semibold">Today&apos;s goal progress</p>
+          <p className="text-sm font-semibold">
+            {isSingleDay ? `${range.label} · goal progress` : `${range.label} · daily average vs target`}
+          </p>
           <p className="text-xs text-muted-foreground">
-            {remainingKcal} kcal and {round(remainingProtein, 1)} g protein remaining
+            {isSingleDay
+              ? `${Math.round(remainingKcal)} kcal and ${round(remainingProtein, 1)} g protein remaining`
+              : `averaging ${Math.round(progress.calories)} kcal and ${round(progress.protein, 1)} g protein per day`}
           </p>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <ProgressRing value={todayTotals.calories} target={goals.calorie_target} label="Calories" unit=" kcal" />
-          <ProgressRing value={todayTotals.protein} target={goals.protein_target_g} label="Protein" unit=" g" tone="protein" />
-          <ProgressRing value={todayTotals.carbs} target={goals.carb_target_g} label="Carbs" unit=" g" tone="carbs" />
-          <ProgressRing value={todayTotals.fat} target={goals.fat_target_g} label="Fat" unit=" g" tone="fat" />
+          <ProgressRing value={Math.round(progress.calories)} target={goals.calorie_target} label="Calories" unit=" kcal" />
+          <ProgressRing value={round(progress.protein, 1)} target={goals.protein_target_g} label="Protein" unit=" g" tone="protein" />
+          <ProgressRing value={round(progress.carbs, 1)} target={goals.carb_target_g} label="Carbs" unit=" g" tone="carbs" />
+          <ProgressRing value={round(progress.fat, 1)} target={goals.fat_target_g} label="Fat" unit=" g" tone="fat" />
         </div>
       </section>
 

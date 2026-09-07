@@ -17,7 +17,12 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useCreateMeal } from "@/lib/data";
-import { analyzeMeal, parseServingToGrams, type MacroEstimate } from "@/lib/food-estimate";
+import {
+  analyzeMeal,
+  parseServingToGrams,
+  SERVING_SUGGESTIONS,
+  type MacroEstimate,
+} from "@/lib/food-estimate";
 import { MEAL_CATEGORIES } from "@/lib/nutrition";
 
 export const Route = createFileRoute("/_authenticated/add-meal")({
@@ -287,10 +292,19 @@ function AddMeal() {
               <Label htmlFor="serving">Serving amount</Label>
               <Input
                 id="serving"
+                list="serving-suggestions"
                 placeholder="200 g / 1 bowl / 2 rotis"
                 value={form.serving_amount}
                 onChange={(e) => setForm((s) => ({ ...s, serving_amount: e.target.value }))}
               />
+              <datalist id="serving-suggestions">
+                {SERVING_SUGGESTIONS.map((v) => (
+                  <option key={v} value={v} />
+                ))}
+              </datalist>
+              <p className="text-[11px] text-muted-foreground">
+                Pick a common size or type your own — used to scale the estimate.
+              </p>
             </div>
           </div>
           <div className="space-y-2">
