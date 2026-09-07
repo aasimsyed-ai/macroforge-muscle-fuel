@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Flame, Loader2, Mail } from "lucide-react";
 import { toast } from "sonner";
@@ -10,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
+import { guestActive, guestExpired, migrateGuestToCloud } from "@/lib/guest";
 
 const searchSchema = z.object({
   mode: z.enum(["signin", "signup"]).optional(),
@@ -36,11 +38,26 @@ const LAST_EMAIL_KEY = "mf:last-email";
 function AuthPage() {
   const { mode } = Route.useSearch();
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const [tab, setTab] = useState<"signin" | "signup">(mode ?? "signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [linkBusy, setLinkBusy] = useState(false);
+  const [trialOver, setTrialOver] = useState(false);
+
+  async function afterSignedIn() {
+    if (guestActive()) {
+      try {
+        await migrateGuestToCloud();
+        toast.success("Your trial data is now saved to your account.");
+      } catch {
+        toast.error("Signed in, but saving your trial data failed — it is still on this device.");
+      }
+    }
+    qc.clear();
+    navigate({ to: "/dashboard", replace: true });
+  }
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -54,6 +71,10 @@ function AuthPage() {
       }
     } catch {
       // storage unavailable — fine
+    }
+    if (guestActive() && guestExpired()) {
+      setTrialOver(true);
+      setTab("signup");
     }
   }, [navigate]);
 
@@ -100,7 +121,7 @@ function AuthPage() {
         rememberEmail(email.trim());
         const { data } = await supabase.auth.getSession();
         if (data.session) {
-          navigate({ to: "/dashboard", replace: true });
+          await afterSignedIn();
         } else {
           toast.success("Check your email to confirm your account, then sign in.");
           setTab("signin");
@@ -109,7 +130,7 @@ function AuthPage() {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         rememberEmail(email.trim());
-        navigate({ to: "/dashboard", replace: true });
+        await afterSignedIn();
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Authentication failed");
@@ -136,6 +157,12 @@ function AuthPage() {
         <p className="mt-1 text-sm text-muted-foreground">
           Your meals, macros and body metrics stay private to your account.
         </p>
+
+        {trialOver ? (
+          <div className="mt-4 rounded-lg border border-primary/40 bg-primary/10 p-3 text-xs text-foreground">
+            Your 3-day trial has ended. Create a free account now and everything you logged on this device is kept.
+          </div>
+        ) : null}
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as "signin" | "signup")} className="mt-5">
           <TabsList className="grid w-full grid-cols-2">

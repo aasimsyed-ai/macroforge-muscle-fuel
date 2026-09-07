@@ -1,7 +1,8 @@
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Camera, Dumbbell, LineChart, Target } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { ensureGuest } from "@/lib/guest";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -30,6 +31,13 @@ const FEATURES = [
 ];
 
 function Landing() {
+  const navigate = useNavigate();
+
+  function startTrial() {
+    ensureGuest();
+    navigate({ to: "/dashboard" });
+  }
+
   return (
     <div className="min-h-screen hero-glow">
       <div className="mx-auto flex w-full max-w-4xl flex-col px-5 py-14 sm:py-24">
@@ -44,8 +52,8 @@ function Landing() {
           protein on target, and watch weight and waist move the way you want.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
-          <Button asChild size="lg">
-            <Link to="/auth">Start tracking</Link>
+          <Button size="lg" onClick={startTrial}>
+            Start tracking — no sign-up
           </Button>
           <Button asChild size="lg" variant="secondary">
             <Link to="/auth" search={{ mode: "signin" }}>
@@ -53,6 +61,9 @@ function Landing() {
             </Link>
           </Button>
         </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          Try it free for 3 days with nothing to fill in. Create an account any time to save your data across devices.
+        </p>
 
         <div className="mt-14 grid gap-4 sm:grid-cols-2">
           {FEATURES.map(({ icon: Icon, title, body }) => (

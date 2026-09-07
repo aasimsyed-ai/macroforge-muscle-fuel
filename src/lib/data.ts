@@ -3,6 +3,22 @@ import { format } from "date-fns";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import {
+  guestActive,
+  guestAllMeals,
+  guestAllMetrics,
+  guestCreateMeal,
+  guestDeleteMeal,
+  guestGetGoals,
+  guestGetMeal,
+  guestGetProfile,
+  guestListMeals,
+  guestListMetrics,
+  guestSaveMetric,
+  guestUpdateGoals,
+  guestUpdateMeal,
+  guestUpdateProfile,
+} from "@/lib/guest";
 
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 export type Goals = Database["public"]["Tables"]["goals"]["Row"];
@@ -34,6 +50,7 @@ export function useProfile() {
   return useQuery({
     queryKey: ["profile"],
     queryFn: async (): Promise<Profile | null> => {
+      if (guestActive()) return guestGetProfile();
       const userId = await requireUserId();
       const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
       if (error) throw error;
@@ -53,6 +70,7 @@ export function useUpdateProfile() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (patch: Partial<Profile>) => {
+      if (guestActive()) return guestUpdateProfile(patch);
       const userId = await requireUserId();
       const { data, error } = await supabase
         .from("profiles")
@@ -73,6 +91,7 @@ export function useGoals() {
   return useQuery({
     queryKey: ["goals"],
     queryFn: async (): Promise<Goals> => {
+      if (guestActive()) return guestGetGoals();
       const userId = await requireUserId();
       const { data, error } = await supabase
         .from("goals")
@@ -100,6 +119,7 @@ export function useUpdateGoals() {
   return useMutation({
     mutationFn: async (patch: Partial<Goals> & { id: string }) => {
       const { id, ...rest } = patch;
+      if (guestActive()) return guestUpdateGoals(rest);
       const { data, error } = await supabase.from("goals").update(rest).eq("id", id).select("*").single();
       if (error) throw error;
       return data;
@@ -114,6 +134,7 @@ export function useMeals(from: Date, to: Date) {
   return useQuery({
     queryKey: ["meals", from.toISOString(), to.toISOString()],
     queryFn: async (): Promise<Meal[]> => {
+      if (guestActive()) return guestListMeals(from, to);
       const userId = await requireUserId();
       const { data, error } = await supabase
         .from("meals")
@@ -159,8 +180,9 @@ export function useCreateMeal() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: MealInput) => {
-      const userId = await requireUserId();
       const { photo, ...rest } = input;
+      if (guestActive()) return guestCreateMeal(rest);
+      const userId = await requireUserId();
       const photo_path = photo ? await uploadMealPhoto(photo) : null;
       const { data, error } = await supabase
         .from("meals")
@@ -178,6 +200,7 @@ export function useDeleteMeal() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      if (guestActive()) return guestDeleteMeal(id);
       const { error } = await supabase.from("meals").delete().eq("id", id);
       if (error) throw error;
     },
@@ -192,6 +215,7 @@ export function useMeal(id: string | null) {
     enabled: !!id,
     queryFn: async (): Promise<Meal | null> => {
       if (!id) return null;
+      if (guestActive()) return guestGetMeal(id);
       await requireUserId();
       const { data, error } = await supabase.from("meals").select("*").eq("id", id).maybeSingle();
       if (error) throw error;
@@ -212,6 +236,7 @@ export function useUpdateMeal() {
   return useMutation({
     mutationFn: async (input: MealUpdate) => {
       const { id, photo, photo_path, ...rest } = input;
+      if (guestActive()) return guestUpdateMeal({ id, ...rest });
       const nextPath = photo ? await uploadMealPhoto(photo) : (photo_path ?? null);
       const { data, error } = await supabase
         .from("meals")
@@ -250,17 +275,35 @@ export function useRecentMeals(limit = 12) {
     queryKey: ["meals", "recent-templates", limit],
     staleTime: 1000 * 60,
     queryFn: async (): Promise<MealTemplate[]> => {
-      const userId = await requireUserId();
-      const { data, error } = await supabase
-        .from("meals")
-        .select("name, category, serving_amount, calories, protein_g, carbs_g, fat_g, is_estimate, estimate_source, eaten_at")
-        .eq("user_id", userId)
-        .order("eaten_at", { ascending: false })
-        .limit(120);
-      if (error) throw error;
+      let rows: {
+        name: string;
+        category: string;
+        serving_amount: string | null;
+        calories: number;
+        protein_g: number;
+        carbs_g: number;
+        fat_g: number;
+        is_estimate: boolean;
+        estimate_source: string | null;
+      }[];
+      if (guestActive()) {
+        rows = guestAllMeals();
+      } else {
+        const userId = await requireUserId();
+        const { data, error } = await supabase
+          .from("meals")
+          .select(
+            "name, category, serving_amount, calories, protein_g, carbs_g, fat_g, is_estimate, estimate_source, eaten_at",
+          )
+          .eq("user_id", userId)
+          .order("eaten_at", { ascending: false })
+          .limit(120);
+        if (error) throw error;
+        rows = data ?? [];
+      }
       const seen = new Set<string>();
       const out: MealTemplate[] = [];
-      for (const m of data ?? []) {
+      for (const m of rows) {
         const key = m.name.trim().toLowerCase();
         if (!key || seen.has(key)) continue;
         seen.add(key);
@@ -289,6 +332,7 @@ export function useMealPhotoUrl(path: string | null) {
     staleTime: 1000 * 60 * 30,
     queryFn: async () => {
       if (!path) return null;
+      if (guestActive()) return null;
       const { data, error } = await supabase.storage.from("meal-photos").createSignedUrl(path, 60 * 60);
       if (error) throw error;
       return data.signedUrl;
@@ -302,6 +346,7 @@ export function useMetrics(from: Date, to: Date) {
   return useQuery({
     queryKey: ["metrics", format(from, "yyyy-MM-dd"), format(to, "yyyy-MM-dd")],
     queryFn: async (): Promise<DailyMetric[]> => {
+      if (guestActive()) return guestListMetrics(from, to);
       const userId = await requireUserId();
       const { data, error } = await supabase
         .from("daily_metrics")
@@ -320,6 +365,7 @@ export function useAllMetrics() {
   return useQuery({
     queryKey: ["metrics", "all"],
     queryFn: async (): Promise<DailyMetric[]> => {
+      if (guestActive()) return guestAllMetrics();
       const userId = await requireUserId();
       const { data, error } = await supabase
         .from("daily_metrics")
@@ -336,6 +382,7 @@ export function useSaveMetric() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: Partial<DailyMetric> & { metric_date: string }) => {
+      if (guestActive()) return guestSaveMetric(input);
       const userId = await requireUserId();
       const { data, error } = await supabase
         .from("daily_metrics")

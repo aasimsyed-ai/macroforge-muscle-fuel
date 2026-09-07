@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { TRIAL_DAYS, guestActive, guestDayNumber } from "@/lib/guest";
 
 const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
@@ -15,6 +16,7 @@ const NAV = [
 export function AppShell({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const isGuest = guestActive();
 
   async function signOut() {
     await queryClient.cancelQueries();
@@ -25,6 +27,16 @@ export function AppShell({ title, subtitle, children }: { title: string; subtitl
 
   return (
     <div className="min-h-screen hero-glow pb-24">
+      {isGuest ? (
+        <div className="border-b border-primary/30 bg-primary/10 px-4 py-2 text-center text-xs">
+          <span className="text-muted-foreground">
+            Trial · day {guestDayNumber()} of {TRIAL_DAYS} — your data is only on this device.
+          </span>{" "}
+          <Link to="/auth" search={{ mode: "signup" }} className="font-semibold text-primary underline">
+            Create a free account to save it
+          </Link>
+        </div>
+      ) : null}
       <header className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3 px-4 pt-6">
         <div>
           <Link to="/dashboard" className="flex items-center gap-2 text-sm font-semibold text-primary">
@@ -46,9 +58,15 @@ export function AppShell({ title, subtitle, children }: { title: string; subtitl
               </Link>
             ))}
           </nav>
-          <Button variant="ghost" size="icon" onClick={signOut} aria-label="Sign out">
-            <LogOut className="size-4" />
-          </Button>
+          {isGuest ? (
+            <Button asChild size="sm">
+              <Link to="/auth" search={{ mode: "signup" }}>Sign up</Link>
+            </Button>
+          ) : (
+            <Button variant="ghost" size="icon" onClick={signOut} aria-label="Sign out">
+              <LogOut className="size-4" />
+            </Button>
+          )}
         </div>
       </header>
 
