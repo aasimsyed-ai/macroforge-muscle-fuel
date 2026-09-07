@@ -9,9 +9,12 @@ import { MetricsQuickLog } from "@/components/app/MetricsQuickLog";
 import { ProgressRing } from "@/components/app/ProgressRing";
 import { StatCard } from "@/components/app/StatCard";
 import { BodyTrendChart, DailyIntakeChart, HabitChart } from "@/components/app/TrendCharts";
+import { TrackingModeToggle } from "@/components/workout/TrackingModeToggle";
+import { WorkoutDashboard } from "@/components/workout/WorkoutDashboard";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAllMetrics, useGoals, useMeals, useMetrics, useProfile } from "@/lib/data";
+import { useTrackingMode } from "@/lib/workouts/useTrackingMode";
 import {
   RANGE_OPTIONS,
   downloadCsv,
@@ -55,6 +58,8 @@ function Dashboard() {
     ...(search.to ? { to: search.to } : {}),
   });
 
+  const [trackingMode, setTrackingMode] = useTrackingMode();
+
   const profile = useProfile();
   const goalsQuery = useGoals();
   const rangeMeals = useMeals(range.from, range.to);
@@ -85,6 +90,12 @@ function Dashboard() {
   const latestWeight = weighIns.length ? Number(weighIns[weighIns.length - 1]!.weight_kg) : null;
   const waistLogs = (allMetrics.data ?? []).filter((m) => m.waist_cm != null);
   const latestWaist = waistLogs.length ? Number(waistLogs[waistLogs.length - 1]!.waist_cm) : null;
+
+  // Latest logged body weight (daily metrics) with the profile weight as fallback,
+  // used only to estimate workout calories.
+  const profileWeight =
+    profile.data?.start_weight_kg != null ? Number(profile.data.start_weight_kg) : null;
+  const currentBodyWeightKg = latestWeight ?? profileWeight;
 
   const workoutDays = metrics.filter((m) => Number(m.workout_minutes ?? 0) > 0).length;
   const creatineDays = metrics.filter((m) => m.creatine_taken).length;
@@ -138,6 +149,10 @@ function Dashboard() {
       title="Dashboard"
       subtitle={`${range.label} · ${latestWeight ? `${latestWeight} kg` : "no weigh-in yet"} → ${goals.target_weight_kg} kg goal`}
     >
+      <div className="mb-3">
+        <TrackingModeToggle mode={trackingMode} onChange={setTrackingMode} />
+      </div>
+
       <div className="flex flex-wrap items-center gap-2">
         {RANGE_OPTIONS.filter((o) => o.value !== "custom").map((o) => (
           <button
@@ -173,11 +188,21 @@ function Dashboard() {
             className="rounded-md border border-border bg-card px-2 py-1.5 text-xs"
           />
         </div>
-        <Button variant="secondary" size="sm" onClick={exportCsv} className="ml-auto">
-          <Download className="size-4" /> Export CSV
-        </Button>
+        {trackingMode === "food" ? (
+          <Button variant="secondary" size="sm" onClick={exportCsv} className="ml-auto">
+            <Download className="size-4" /> Export CSV
+          </Button>
+        ) : null}
       </div>
 
+      {trackingMode === "workout" ? (
+        <WorkoutDashboard
+          fromDate={format(range.from, "yyyy-MM-dd")}
+          toDate={format(range.to, "yyyy-MM-dd")}
+          bodyWeightKg={currentBodyWeightKg}
+        />
+      ) : (
+        <>
       <section className="panel mt-5 p-4" aria-label="Goal progress">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <p className="text-sm font-semibold">
@@ -261,6 +286,8 @@ function Dashboard() {
         <h2 className="mb-3 text-lg font-semibold">Meal history · {range.label}</h2>
         <MealList meals={rangeMeals.data ?? []} />
       </section>
+        </>
+      )}
     </AppShell>
   );
 }

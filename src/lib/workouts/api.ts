@@ -210,6 +210,105 @@ export async function deleteWorkoutSession(id: string): Promise<void> {
   if (error) throw error;
 }
 
+export interface WorkoutRangeStats {
+  sessions: SessionRow[];
+  workouts: number;
+  totalDurationMinutes: number;
+  totalVolume: number;
+  completedSets: number;
+  totalSets: number;
+  muscleGroups: string[];
+  averageHeartRate: number | null;
+  calories: { value: number | null; anyWearable: boolean; anyEstimated: boolean };
+}
+
+/** One roll-up for the workout dashboard over a date range. */
+export async function fetchWorkoutStats(
+  fromDate: string,
+  toDate: string,
+): Promise<WorkoutRangeStats> {
+  const user = await requireUser();
+  const sessions = await fetchWorkoutSessions(fromDate, toDate);
+
+  const empty: WorkoutRangeStats = {
+    sessions,
+    workouts: sessions.length,
+    totalDurationMinutes: 0,
+    totalVolume: 0,
+    completedSets: 0,
+    totalSets: 0,
+    muscleGroups: [],
+    averageHeartRate: null,
+    calories: { value: sessions.length ? 0 : null, anyWearable: false, anyEstimated: false },
+  };
+  if (sessions.length === 0) return empty;
+
+  const sessionIds = sessions.map((session) => session.id);
+  const { data: exerciseRows, error: exerciseError } = await supabase
+    .from("workout_exercises")
+    .select("id, session_id, muscle_group")
+    .eq("user_id", user.id)
+    .in("session_id", sessionIds);
+  if (exerciseError) throw exerciseError;
+
+  const exercises = exerciseRows ?? [];
+  const exerciseIds = exercises.map((row) => row.id);
+
+  let completedSets = 0;
+  let totalSets = 0;
+  if (exerciseIds.length > 0) {
+    const { data: setRows, error: setError } = await supabase
+      .from("workout_sets")
+      .select("completed")
+      .in("workout_exercise_id", exerciseIds);
+    if (setError) throw setError;
+    for (const set of setRows ?? []) {
+      totalSets += 1;
+      if (set.completed) completedSets += 1;
+    }
+  }
+
+  let totalDuration = 0;
+  let totalVolume = 0;
+  let calorieTotal = 0;
+  let anyWearable = false;
+  let anyEstimated = false;
+  const hrValues: number[] = [];
+
+  for (const session of sessions) {
+    totalDuration += session.duration_minutes ?? 0;
+    totalVolume += Number(session.total_volume ?? 0);
+    if (session.average_heart_rate != null) hrValues.push(session.average_heart_rate);
+
+    if (session.calories_source === "wearable" && session.wearable_calories_burned != null) {
+      calorieTotal += Number(session.wearable_calories_burned);
+      anyWearable = true;
+    } else if (
+      session.calories_source === "estimated" &&
+      session.estimated_calories_burned != null
+    ) {
+      calorieTotal += Number(session.estimated_calories_burned);
+      anyEstimated = true;
+    }
+  }
+
+  const muscleGroups = [...new Set(exercises.map((row) => row.muscle_group).filter(Boolean))].sort();
+
+  return {
+    sessions,
+    workouts: sessions.length,
+    totalDurationMinutes: totalDuration,
+    totalVolume,
+    completedSets,
+    totalSets,
+    muscleGroups,
+    averageHeartRate: hrValues.length
+      ? Math.round(hrValues.reduce((sum, value) => sum + value, 0) / hrValues.length)
+      : null,
+    calories: { value: Math.round(calorieTotal), anyWearable, anyEstimated },
+  };
+}
+
 /* --------------------------- training preferences ------------------------- */
 
 function rowToPreferences(row: PreferencesRow): TrainingPreferences {
