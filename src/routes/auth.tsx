@@ -43,8 +43,14 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const [linkBusy, setLinkBusy] = useState(false);
   const [trialOver, setTrialOver] = useState(false);
+
+  // One-time code (OTP) sign-in — by email or phone.
+  const [codeChannel, setCodeChannel] = useState<"email" | "phone">("email");
+  const [phone, setPhone] = useState("");
+  const [code, setCode] = useState("");
+  const [codeSent, setCodeSent] = useState(false);
+  const [codeBusy, setCodeBusy] = useState(false);
 
   async function afterSignedIn() {
     if (guestActive()) {
@@ -86,24 +92,61 @@ function AuthPage() {
     }
   }
 
-  async function sendMagicLink() {
-    if (!email.trim()) {
-      toast.error("Enter your email first, then request a link.");
+  async function sendCode() {
+    const target = codeChannel === "email" ? email.trim() : phone.trim();
+    if (!target) {
+      toast.error(
+        codeChannel === "email"
+          ? "Enter your email first."
+          : "Enter your phone number with country code, e.g. +91 98765 43210.",
+      );
       return;
     }
-    setLinkBusy(true);
+    setCodeBusy(true);
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
-        options: { emailRedirectTo: window.location.origin, shouldCreateUser: true },
-      });
+      const { error } =
+        codeChannel === "email"
+          ? await supabase.auth.signInWithOtp({
+              email: target,
+              options: { emailRedirectTo: window.location.origin, shouldCreateUser: true },
+            })
+          : await supabase.auth.signInWithOtp({
+              phone: target.replace(/\s+/g, ""),
+              options: { shouldCreateUser: true },
+            });
       if (error) throw error;
-      rememberEmail(email.trim());
-      toast.success("Login link sent — open it on this device to sign in without a password.");
+      if (codeChannel === "email") rememberEmail(target);
+      setCodeSent(true);
+      toast.success(
+        codeChannel === "email"
+          ? "Sent — check your email for a 6-digit code (or just tap the login link)."
+          : "Sent — check your phone for a 6-digit code.",
+      );
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not send the login link");
+      toast.error(err instanceof Error ? err.message : "Could not send the code");
     } finally {
-      setLinkBusy(false);
+      setCodeBusy(false);
+    }
+  }
+
+  async function verifyCode() {
+    const token = code.trim();
+    if (token.length < 6) {
+      toast.error("Enter the 6-digit code.");
+      return;
+    }
+    setCodeBusy(true);
+    try {
+      const { error } =
+        codeChannel === "email"
+          ? await supabase.auth.verifyOtp({ email: email.trim(), token, type: "email" })
+          : await supabase.auth.verifyOtp({ phone: phone.trim().replace(/\s+/g, ""), token, type: "sms" });
+      if (error) throw error;
+      await afterSignedIn();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "That code did not work — resend and try again.");
+    } finally {
+      setCodeBusy(false);
     }
   }
 
@@ -202,16 +245,89 @@ function AuthPage() {
           </Button>
         </form>
 
-        <Button
-          type="button"
-          variant="ghost"
-          className="mt-2 w-full text-xs"
-          onClick={sendMagicLink}
-          disabled={linkBusy}
-        >
-          <Mail className="size-4" />
-          {linkBusy ? "Sending…" : "Email me a login link (no password)"}
-        </Button>
+        <div className="mt-3 rounded-lg border border-border p-3">
+          <div className="flex items-center gap-2 text-xs font-medium">
+            <Mail className="size-4 text-primary" />
+            Sign in with a one-time code
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-1 rounded-md bg-secondary p-1 text-xs">
+            {(["email", "phone"] as const).map((ch) => (
+              <button
+                key={ch}
+                type="button"
+                onClick={() => {
+                  setCodeChannel(ch);
+                  setCodeSent(false);
+                  setCode("");
+                }}
+                className={`rounded px-2 py-1 capitalize transition-colors ${
+                  codeChannel === ch ? "bg-card font-semibold text-foreground" : "text-muted-foreground"
+                }`}
+              >
+                {ch}
+              </button>
+            ))}
+          </div>
+
+          {codeChannel === "phone" ? (
+            <Input
+              className="mt-2"
+              type="tel"
+              autoComplete="tel"
+              placeholder="+91 98765 43210"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
+          ) : null}
+
+          {codeSent ? (
+            <div className="mt-2 flex gap-2">
+              <Input
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="6-digit code"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+              />
+              <Button type="button" onClick={verifyCode} disabled={codeBusy}>
+                {codeBusy ? <Loader2 className="size-4 animate-spin" /> : "Verify"}
+              </Button>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              className="mt-2 w-full text-xs"
+              onClick={sendCode}
+              disabled={codeBusy}
+            >
+              {codeBusy
+                ? "Sending…"
+                : codeChannel === "email"
+                  ? "Email me a code (or login link)"
+                  : "Text me a code"}
+            </Button>
+          )}
+
+          {codeSent ? (
+            <button
+              type="button"
+              onClick={() => {
+                setCodeSent(false);
+                setCode("");
+              }}
+              className="mt-2 w-full text-[11px] text-muted-foreground underline"
+            >
+              Use a different address / number
+            </button>
+          ) : null}
+
+          {codeChannel === "phone" ? (
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Phone codes require an SMS provider enabled in your Supabase Auth settings.
+            </p>
+          ) : null}
+        </div>
 
         <div className="my-4 flex items-center gap-3 text-xs text-muted-foreground">
           <span className="h-px flex-1 bg-border" /> or <span className="h-px flex-1 bg-border" />
