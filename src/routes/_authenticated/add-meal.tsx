@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { format } from "date-fns";
 import { Camera, Sparkles, X } from "lucide-react";
@@ -35,6 +35,15 @@ export const Route = createFileRoute("/_authenticated/add-meal")({
   component: AddMeal,
 });
 
+type MacroKey = "calories" | "protein_g" | "carbs_g" | "fat_g";
+
+const NO_MACROS_TOUCHED: Record<MacroKey, boolean> = {
+  calories: false,
+  protein_g: false,
+  carbs_g: false,
+  fat_g: false,
+};
+
 function AddMeal() {
   const navigate = useNavigate();
   const create = useCreateMeal();
@@ -44,6 +53,9 @@ function AddMeal() {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [estimate, setEstimate] = useState<MacroEstimate | null>(null);
   const [estimating, setEstimating] = useState(false);
+  // Which macro fields the user has typed into by hand. Auto-estimation never
+  // overwrites these — only the manual "Re-estimate" button does.
+  const [touched, setTouched] = useState<Record<MacroKey, boolean>>(NO_MACROS_TOUCHED);
   const [form, setForm] = useState({
     name: "",
     category: "lunch",
@@ -62,6 +74,38 @@ function AddMeal() {
     setPhotoUrl(file ? URL.createObjectURL(file) : null);
   }
 
+  // Auto-estimate: whenever there's a food name (and, ideally, a serving size),
+  // fill calories/macros with an approximate value. Debounced so it doesn't run
+  // on every keystroke. Fields the user has edited by hand are left untouched.
+  useEffect(() => {
+    const description = form.name.trim();
+    if (!description) return;
+
+    const handle = window.setTimeout(async () => {
+      setEstimating(true);
+      try {
+        const result = await analyzeMeal({
+          description,
+          grams: parseServingToGrams(form.serving_amount),
+          photo,
+        });
+        if (!result) return;
+        setEstimate(result);
+        setForm((s) => ({
+          ...s,
+          calories: touched.calories ? s.calories : String(result.calories),
+          protein_g: touched.protein_g ? s.protein_g : String(result.protein),
+          carbs_g: touched.carbs_g ? s.carbs_g : String(result.carbs),
+          fat_g: touched.fat_g ? s.fat_g : String(result.fat),
+        }));
+      } finally {
+        setEstimating(false);
+      }
+    }, 600);
+
+    return () => window.clearTimeout(handle);
+  }, [form.name, form.serving_amount, photo, touched]);
+
   async function estimateMacros() {
     if (!form.name.trim() && !photo) {
       toast.error("Add a food name (or a photo plus a name) to estimate macros.");
@@ -79,6 +123,8 @@ function AddMeal() {
         return;
       }
       setEstimate(result);
+      // Manual re-estimate overrides everything, including hand-edited fields.
+      setTouched(NO_MACROS_TOUCHED);
       setForm((s) => ({
         ...s,
         calories: String(result.calories),
@@ -98,19 +144,44 @@ function AddMeal() {
       toast.error("Give the meal a name.");
       return;
     }
+
+    let { calories, protein_g, carbs_g, fat_g } = form;
+    let usedEstimate = estimate;
+
+    // Safety net: if every macro field is still empty at save time, estimate now
+    // so a meal is never stored as 0 kcal / 0 g.
+    if (!calories && !protein_g && !carbs_g && !fat_g) {
+      try {
+        const result = await analyzeMeal({
+          description: form.name,
+          grams: parseServingToGrams(form.serving_amount),
+          photo,
+        });
+        if (result) {
+          usedEstimate = result;
+          calories = String(result.calories);
+          protein_g = String(result.protein);
+          carbs_g = String(result.carbs);
+          fat_g = String(result.fat);
+        }
+      } catch {
+        // fall through — save with whatever we have
+      }
+    }
+
     try {
       await create.mutateAsync({
         name: form.name.trim(),
         category: form.category,
         serving_amount: form.serving_amount.trim() || null,
-        calories: Number(form.calories || 0),
-        protein_g: Number(form.protein_g || 0),
-        carbs_g: Number(form.carbs_g || 0),
-        fat_g: Number(form.fat_g || 0),
+        calories: Number(calories || 0),
+        protein_g: Number(protein_g || 0),
+        carbs_g: Number(carbs_g || 0),
+        fat_g: Number(fat_g || 0),
         notes: form.notes.trim() || null,
         eaten_at: new Date(form.eaten_at).toISOString(),
-        is_estimate: estimate !== null,
-        estimate_source: estimate?.source ?? null,
+        is_estimate: usedEstimate !== null,
+        estimate_source: usedEstimate?.source ?? null,
         photo,
       });
       toast.success("Meal saved");
@@ -120,12 +191,14 @@ function AddMeal() {
     }
   }
 
-  const macroFields: { key: "calories" | "protein_g" | "carbs_g" | "fat_g"; label: string }[] = [
+  const macroFields: { key: MacroKey; label: string }[] = [
     { key: "calories", label: "Calories (kcal)" },
     { key: "protein_g", label: "Protein (g)" },
     { key: "carbs_g", label: "Carbs (g)" },
     { key: "fat_g", label: "Fat (g)" },
   ];
+
+  const autoFilled = estimate !== null && !Object.values(touched).every(Boolean);
 
   return (
     <AppShell title="Add Meal" subtitle="Photo optional · every estimate stays editable">
@@ -168,12 +241,13 @@ function AddMeal() {
             </button>
           )}
           <Button type="button" variant="secondary" className="mt-3 w-full" onClick={estimateMacros} disabled={estimating}>
-            <Sparkles className="size-4" /> {estimating ? "Estimating…" : "Estimate calories & macros"}
+            <Sparkles className="size-4" />{" "}
+            {estimating ? "Estimating…" : estimate ? "Re-estimate calories & macros" : "Estimate calories & macros"}
           </Button>
           <p className="mt-3 rounded-lg bg-secondary p-3 text-xs text-muted-foreground">
-            Estimates are <strong>approximate</strong>, not measured values. They come from a reference food table using
-            your description and serving size — a photo alone cannot know your portion. Always check the numbers before
-            saving.
+            Calories and macros fill in <strong>automatically</strong> from your food name and serving size. They are{" "}
+            <strong>approximate</strong>, not measured values — edit any number and your value is kept. Use{" "}
+            <em>Re-estimate</em> to recalculate from scratch.
           </p>
           {estimate ? (
             <p className="mt-2 text-xs text-primary">
@@ -219,23 +293,39 @@ function AddMeal() {
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {macroFields.map((f) => (
-              <div key={f.key} className="space-y-2">
-                <Label htmlFor={f.key} className="text-xs">
-                  {f.label}
-                </Label>
-                <Input
-                  id={f.key}
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.1"
-                  value={form[f.key]}
-                  onChange={(e) => setForm((s) => ({ ...s, [f.key]: e.target.value }))}
-                />
-              </div>
-            ))}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Calories & macros
+              </Label>
+              {autoFilled ? (
+                <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary">
+                  Auto-estimated · editable
+                </span>
+              ) : null}
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {macroFields.map((f) => (
+                <div key={f.key} className="space-y-2">
+                  <Label htmlFor={f.key} className="text-xs">
+                    {f.label}
+                  </Label>
+                  <Input
+                    id={f.key}
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.1"
+                    value={form[f.key]}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setForm((s) => ({ ...s, [f.key]: v }));
+                      setTouched((t) => (t[f.key] ? t : { ...t, [f.key]: true }));
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="eaten_at">Date & time</Label>
