@@ -102,7 +102,20 @@ function AddMeal() {
   // Which macro fields the user has typed into by hand. Auto-estimation never
   // overwrites these — only the manual "Re-estimate" button does.
   const [touched, setTouched] = useState<Record<MacroKey, boolean>>(NO_MACROS_TOUCHED);
+  // When editing, the saved numbers stay put until the food name or serving is
+  // changed — then the estimate takes over and re-adds every "+" item.
+  const [descEdited, setDescEdited] = useState(false);
   const [form, setForm] = useState(makeEmptyForm);
+
+  function editDescription(patch: Partial<typeof form>) {
+    setForm((s) => ({ ...s, ...patch }));
+    if (isEdit && !descEdited) {
+      // first change to the name/serving while editing — let the estimate take
+      // over from the saved numbers.
+      setDescEdited(true);
+      setTouched(NO_MACROS_TOUCHED);
+    }
+  }
 
   const targetId = editId ?? null;
   const ready = syncedId === targetId;
@@ -126,12 +139,12 @@ function AddMeal() {
         eaten_at: format(new Date(m.eaten_at), "yyyy-MM-dd'T'HH:mm"),
       });
       setExistingPhotoPath(m.photo_path);
-      setTouched(ALL_MACROS_TOUCHED); // keep saved numbers; don't auto-overwrite
     } else {
       setForm(makeEmptyForm());
       setExistingPhotoPath(null);
-      setTouched(NO_MACROS_TOUCHED);
     }
+    setTouched(NO_MACROS_TOUCHED);
+    setDescEdited(false);
     setPhoto(null);
     setPhotoUrl(null);
     setEstimate(null);
@@ -163,8 +176,11 @@ function AddMeal() {
 
   // Auto-estimate: whenever there's a food name, fill calories/macros with an
   // approximate value. Debounced; fields edited by hand are left untouched.
+  // When editing an existing meal it only kicks in once the name/serving is
+  // actually changed, so opening an edit doesn't rewrite the saved numbers.
   useEffect(() => {
     if (!ready) return;
+    if (isEdit && !descEdited) return;
     const description = form.name.trim();
     if (!description) return;
 
@@ -191,7 +207,7 @@ function AddMeal() {
     }, 600);
 
     return () => window.clearTimeout(handle);
-  }, [form.name, form.serving_amount, photo, touched, ready]);
+  }, [form.name, form.serving_amount, photo, touched, ready, isEdit, descEdited]);
 
   async function estimateMacros() {
     if (!form.name.trim() && !photo) {
@@ -212,6 +228,7 @@ function AddMeal() {
       setEstimate(result);
       // Manual re-estimate overrides everything, including hand-edited fields.
       setTouched(NO_MACROS_TOUCHED);
+      setDescEdited(true);
       setForm((s) => ({
         ...s,
         calories: String(result.calories),
@@ -384,16 +401,14 @@ function AddMeal() {
             <Input
               id="name"
               required
-              list="meal-name-suggestions"
               placeholder="Grilled chicken breast + rice + salad"
               value={form.name}
-              onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
+              onChange={(e) => editDescription({ name: e.target.value })}
             />
-            <datalist id="meal-name-suggestions">
-              {recentMeals.map((t) => (
-                <option key={t.name} value={t.name} />
-              ))}
-            </datalist>
+            <p className="text-[11px] text-muted-foreground">
+              List everything you ate, separated by <strong>+</strong> — e.g. “2 eggs + toast + 1 apple”. Each item is
+              estimated and added up.
+            </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
@@ -415,19 +430,26 @@ function AddMeal() {
               <Label htmlFor="serving">Serving amount</Label>
               <Input
                 id="serving"
-                list="serving-suggestions"
                 placeholder="200 g / 1 bowl / 2 rotis"
                 value={form.serving_amount}
-                onChange={(e) => setForm((s) => ({ ...s, serving_amount: e.target.value }))}
+                onChange={(e) => editDescription({ serving_amount: e.target.value })}
               />
-              <datalist id="serving-suggestions">
+              <div className="flex flex-wrap gap-1">
                 {SERVING_SUGGESTIONS.map((v) => (
-                  <option key={v} value={v} />
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => editDescription({ serving_amount: v })}
+                    className={`rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
+                      form.serving_amount === v
+                        ? "border-primary bg-primary/15 text-primary"
+                        : "border-border text-muted-foreground hover:border-primary hover:text-foreground"
+                    }`}
+                  >
+                    {v}
+                  </button>
                 ))}
-              </datalist>
-              <p className="text-[11px] text-muted-foreground">
-                Pick a common size or type your own — used to scale the estimate.
-              </p>
+              </div>
             </div>
           </div>
           <div className="space-y-2">
