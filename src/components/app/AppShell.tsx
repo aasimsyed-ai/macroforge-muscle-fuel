@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { BarChart3, CirclePlus, Flame, LogOut, Settings } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { NotificationBell } from "@/components/workout/NotificationBell";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { TRIAL_DAYS, guestActive, guestDayNumber } from "@/lib/guest";
@@ -63,9 +64,12 @@ export function AppShell({ title, subtitle, children }: { title: string; subtitl
               <Link to="/auth" search={{ mode: "signup" }}>Sign up</Link>
             </Button>
           ) : (
-            <Button variant="ghost" size="icon" onClick={signOut} aria-label="Sign out">
-              <LogOut className="size-4" />
-            </Button>
+            <>
+              <NotificationBell />
+              <Button variant="ghost" size="icon" onClick={signOut} aria-label="Sign out">
+                <LogOut className="size-4" />
+              </Button>
+            </>
           )}
         </div>
       </header>

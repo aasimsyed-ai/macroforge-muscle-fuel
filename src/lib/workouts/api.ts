@@ -480,7 +480,191 @@ export async function fetchExerciseHistory(exerciseName: string): Promise<Progre
   );
 }
 
+/** Distinct exercise names the user has logged, most recent first. */
+export async function fetchRecentExerciseNames(limit = 12): Promise<string[]> {
+  const user = await requireUser();
+  const { data, error } = await supabase
+    .from("workout_exercises")
+    .select("exercise_name, created_at")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) throw error;
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const row of data ?? []) {
+    const key = row.exercise_name.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    names.push(row.exercise_name);
+    if (names.length >= limit) break;
+  }
+  return names;
+}
+
+export interface TrainingHistorySummary {
+  totalSessions: number;
+  consistentWeeks: number;
+  firstDate: string | null;
+  lastDate: string | null;
+  hasProgressionEvidence: boolean;
+}
+
+/** Aggregate the user's whole logged history for experience-level estimation. */
+export async function fetchTrainingHistorySummary(): Promise<TrainingHistorySummary> {
+  const user = await requireUser();
+  const { data, error } = await supabase
+    .from("workout_sessions")
+    .select("workout_date, total_volume")
+    .eq("user_id", user.id)
+    .order("workout_date", { ascending: true });
+  if (error) throw error;
+
+  const sessions = data ?? [];
+  if (sessions.length === 0) {
+    return {
+      totalSessions: 0,
+      consistentWeeks: 0,
+      firstDate: null,
+      lastDate: null,
+      hasProgressionEvidence: false,
+    };
+  }
+
+  const isoWeek = (dateString: string): string => {
+    const date = new Date(`${dateString}T00:00:00Z`);
+    const day = (date.getUTCDay() + 6) % 7;
+    date.setUTCDate(date.getUTCDate() - day + 3);
+    const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+    const week =
+      1 +
+      Math.round(
+        ((date.getTime() - firstThursday.getTime()) / 86400000 -
+          3 +
+          ((firstThursday.getUTCDay() + 6) % 7)) /
+          7,
+      );
+    return `${date.getUTCFullYear()}-W${week}`;
+  };
+
+  const weeks = new Set(sessions.map((row) => isoWeek(row.workout_date)));
+  const firstDate = sessions[0]?.workout_date ?? null;
+  const lastDate = sessions[sessions.length - 1]?.workout_date ?? null;
+
+  // Progression evidence proxy: mean session volume of the last third clearly
+  // exceeds the first third (needs enough sessions to be meaningful).
+  let hasProgressionEvidence = false;
+  if (sessions.length >= 9) {
+    const third = Math.floor(sessions.length / 3);
+    const mean = (rows: typeof sessions) =>
+      rows.reduce((sum, row) => sum + Number(row.total_volume ?? 0), 0) / Math.max(1, rows.length);
+    const earliest = mean(sessions.slice(0, third));
+    const latest = mean(sessions.slice(-third));
+    hasProgressionEvidence = earliest > 0 && latest > earliest * 1.05;
+  }
+
+  return {
+    totalSessions: sessions.length,
+    consistentWeeks: weeks.size,
+    firstDate,
+    lastDate,
+    hasProgressionEvidence,
+  };
+}
+
+/* -------------------------- notification preferences -------------------- */
+
+export interface NotificationPreferences {
+  enableProgression: boolean;
+  enableMotivation: boolean;
+  enableHealth: boolean;
+  quietHoursStart: string | null;
+  quietHoursEnd: string | null;
+}
+
+export async function fetchNotificationPreferences(): Promise<NotificationPreferences> {
+  const user = await requireUser();
+  const { data, error } = await supabase
+    .from("user_training_preferences")
+    .select(
+      "enable_progression_notifications, enable_motivation_notifications, enable_health_notifications, quiet_hours_start, quiet_hours_end",
+    )
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) {
+    const { data: created, error: insertError } = await supabase
+      .from("user_training_preferences")
+      .insert({ user_id: user.id })
+      .select(
+        "enable_progression_notifications, enable_motivation_notifications, enable_health_notifications, quiet_hours_start, quiet_hours_end",
+      )
+      .single();
+    if (insertError) throw insertError;
+    return {
+      enableProgression: created.enable_progression_notifications,
+      enableMotivation: created.enable_motivation_notifications,
+      enableHealth: created.enable_health_notifications,
+      quietHoursStart: created.quiet_hours_start,
+      quietHoursEnd: created.quiet_hours_end,
+    };
+  }
+  return {
+    enableProgression: data.enable_progression_notifications,
+    enableMotivation: data.enable_motivation_notifications,
+    enableHealth: data.enable_health_notifications,
+    quietHoursStart: data.quiet_hours_start,
+    quietHoursEnd: data.quiet_hours_end,
+  };
+}
+
+export async function saveNotificationPreferences(
+  patch: Partial<NotificationPreferences>,
+): Promise<void> {
+  const user = await requireUser();
+  const update: Database["public"]["Tables"]["user_training_preferences"]["Update"] = {};
+  if (patch.enableProgression !== undefined)
+    update.enable_progression_notifications = patch.enableProgression;
+  if (patch.enableMotivation !== undefined)
+    update.enable_motivation_notifications = patch.enableMotivation;
+  if (patch.enableHealth !== undefined) update.enable_health_notifications = patch.enableHealth;
+  if (patch.quietHoursStart !== undefined) update.quiet_hours_start = patch.quietHoursStart;
+  if (patch.quietHoursEnd !== undefined) update.quiet_hours_end = patch.quietHoursEnd;
+
+  const { error } = await supabase
+    .from("user_training_preferences")
+    .upsert({ user_id: user.id, ...update }, { onConflict: "user_id" });
+  if (error) throw error;
+}
+
 /* -------------------------------- notifications -------------------------- */
+
+export interface NotificationDraft {
+  category: Database["public"]["Enums"]["notification_category"];
+  priority: "low" | "normal" | "high" | "critical";
+  title: string;
+  message: string;
+  dedupeKey: string;
+  relatedExerciseName?: string | null;
+}
+
+/** Insert a notification unless one with the same (user, dedupe_key) exists. */
+export async function createNotificationIfAbsent(draft: NotificationDraft): Promise<void> {
+  const user = await requireUser();
+  const { error } = await supabase.from("notifications").upsert(
+    {
+      user_id: user.id,
+      category: draft.category,
+      priority: draft.priority,
+      title: draft.title,
+      message: draft.message,
+      dedupe_key: draft.dedupeKey,
+      related_exercise_name: draft.relatedExerciseName ?? null,
+    },
+    { onConflict: "user_id,dedupe_key", ignoreDuplicates: true },
+  );
+  if (error) throw error;
+}
 
 export async function fetchNotifications(): Promise<NotificationRow[]> {
   const user = await requireUser();

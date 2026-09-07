@@ -1,9 +1,9 @@
 # Workout Feature Progress
 
-- Current phase: Phase 4/5
-- Overall progress: 62%
-- Current action: Phase 3 (workout UI + dashboard integration) pushed; starting Phase 4 (progression insights, experience level, notifications, WhatsApp prep, wearable adapter, preferences UI).
-- Immediate next step: notifications module + NotificationBell/Panel in AppShell, ProgressionSuggestion + ExperienceLevelCard on the workout dashboard, WhatsApp + wearable disabled providers, training-preferences UI.
+- Current phase: Phase 5/5
+- Overall progress: 85%
+- Current action: Phase 4 (progression/experience/notifications/WhatsApp-prep/wearable-adapter/preferences) pushed; starting Phase 5 (final review, checks, build verification, report).
+- Immediate next step: confirm Lovable build green for the Phase 4 push; final pass over the whole feature; write the final report + "Required from user".
 
 ## RUNNING AUTONOMOUSLY (user is away) — decisions/assumptions log
 - Mode persistence: localStorage key `macroforge-tracking-mode` (spec-named fallback; app has no global client store and mode is a per-device preference, not a shareable URL param).
@@ -32,6 +32,16 @@
 - `src/lib/workouts/api.ts` — added `fetchWorkoutStats` (range roll-up: workouts, duration, calories with source, volume, completed sets, muscle groups, avg HR).
 - `src/components/workout/`: `TrackingModeToggle`, `TrainingPhaseSelect`, `WorkoutSetEditor` (reps, load mode, preset ladder + custom weight input, bodyweight optional added load, RIR/RPE/rest, completed), `WorkoutExerciseForm` (catalog datalist, muscle group, equipment, variant, add/remove sets), `WorkoutLogger` (date/phase/intensity/duration/notes, collapsible wearable block with the "not configured" copy, live volume + single-source calorie preview, `validateWorkoutDraft` errors list, double-submit guard via ref + `isPending`), `WorkoutSummaryCards` (reuses `StatCard`), `WorkoutHistory` (expandable sessions + detail fetch + delete-with-confirm), `WorkoutDashboard` (guest gate, insufficient-data state, loading/error states).
 - `src/routes/_authenticated/dashboard.tsx` — `TrackingModeToggle` above the shared range controls; `{trackingMode === "food" ? <existing food dashboard/> : <WorkoutDashboard fromDate toDate bodyWeightKg/>}`; Export CSV hidden in workout mode; body weight = latest daily metric ?? profile start weight. Food dashboard unchanged.
+
+### Phase 4 — progression / experience / notifications / WhatsApp prep / wearable / preferences  ✅ (pending Lovable build confirm)
+- `src/lib/workouts/api.ts` — `fetchRecentExerciseNames`, `fetchTrainingHistorySummary` (totalSessions, consistentWeeks via ISO-week buckets, first/last date, progression-evidence proxy = last-third mean volume > first-third × 1.05), `fetchNotificationPreferences`/`saveNotificationPreferences` (on `user_training_preferences`), `createNotificationIfAbsent` (upsert ignoreDuplicates on `user_id,dedupe_key`).
+- `src/lib/workouts/notifications.ts` — pure `buildWorkoutNotifications` + `filterNotificationDrafts` (1 per category per day, 5 non-system per week, quiet-hours for non-critical, per-category enable flags, no dup category per run, stable `progression:<slug>` dedupe keys) + `isoWeekKey`/`exerciseSlug`/`isWithinQuietHours`; impure `runWorkoutNotifications` (throttled ~8h/device via localStorage, dedup in DB, runs top ~4 recent exercises through `analyzeExerciseProgression`; no notification from a single workout — `insufficient_data` is skipped).
+- `src/components/workout/` — `ExperienceLevelCard` (calculateExperienceLevel + disclaimer, "Not enough data yet"), `ProgressionSuggestion` (pick a recent exercise, run analysis, badge + explanation + suggested load, insufficient-data message), `NotificationBell` (Popover + unread badge in AppShell for signed-in users) + `NotificationPanel` (list, mark read / mark all / dismiss, category badges, loading/error/empty, ScrollArea, keyboard via Popover), `NotificationPreferences` (rep-range/sets targets + 3 notification toggles + quiet hours), `WearableConnectionCard` (disabled/not-configured, honest copy), `WhatsAppSettings` (phone, opt-in toggle + consent/revoke bookkeeping, 4 category toggles, quiet hours, "delivery disabled" + the required availability sentence).
+- `src/lib/wearables/{types,provider,miFitnessProvider}.ts` — `WearableProvider` interface (connect/disconnect/getConnectionStatus/syncWorkouts/syncSleep/syncHeartRate), `DisabledWearableProvider` (every sync throws `WearableNotConfiguredError`, no fake data), `miFitnessProvider` = disabled stub, `activeWearableProvider = null`. Mi Band / Mi Fitness is never presented as working.
+- `src/lib/whatsapp/{types,provider,api}.ts` — `WhatsAppProvider` interface + `WhatsAppMessage` per spec, `DevelopmentWhatsAppProvider` (sendTemplateMessage throws `WhatsAppDisabledError` + logs disabled; verifyWebhook returns false; processWebhook no-op), `WHATSAPP_DELIVERY_ENABLED = false`, prefs read/write on `whatsapp_preferences`. No tokens in client code, opt-in only.
+- `src/components/app/AppShell.tsx` — `NotificationBell` in the header for signed-in users.
+- `src/components/workout/WorkoutDashboard.tsx` — insight cards (ProgressionSuggestion + ExperienceLevelCard) + collapsible "Training settings & notifications" (NotificationPreferences + WearableConnectionCard + WhatsAppSettings); `runWorkoutNotifications` on mount + after save.
+- `tests/workouts/notifications.test.ts` — dedupe keys, per-category/day cap, weekly cap, enable flags, quiet-hours suppression, wrap-past-midnight quiet hours.
 
 ## Files changed
 - A docs/workout-feature-progress.md

@@ -64,6 +64,37 @@ export function useSaveTrainingPreferences() {
   });
 }
 
+export function useRecentExerciseNames() {
+  return useQuery({
+    queryKey: [...WORKOUT_KEY, "recent-exercises"],
+    queryFn: () => api.fetchRecentExerciseNames(12),
+  });
+}
+
+export function useTrainingHistorySummary() {
+  return useQuery({
+    queryKey: [...WORKOUT_KEY, "history-summary"],
+    queryFn: api.fetchTrainingHistorySummary,
+  });
+}
+
+export function useNotificationPreferences() {
+  return useQuery({
+    queryKey: [...WORKOUT_KEY, "notification-preferences"],
+    queryFn: api.fetchNotificationPreferences,
+  });
+}
+
+export function useSaveNotificationPreferences() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: Parameters<typeof api.saveNotificationPreferences>[0]) =>
+      api.saveNotificationPreferences(patch),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: [...WORKOUT_KEY, "notification-preferences"] }),
+  });
+}
+
 export function useExerciseHistory(exerciseName: string | null) {
   return useQuery({
     queryKey: [...WORKOUT_KEY, "history", (exerciseName ?? "").trim().toLowerCase()],

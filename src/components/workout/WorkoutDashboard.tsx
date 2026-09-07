@@ -1,12 +1,18 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Dumbbell, Plus } from "lucide-react";
+import { Dumbbell, Plus, Settings2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { guestActive } from "@/lib/guest";
-import { useWorkoutStats } from "@/lib/workouts/hooks";
+import { useTrainingPreferences, useWorkoutStats } from "@/lib/workouts/hooks";
+import { runWorkoutNotifications } from "@/lib/workouts/notifications";
 
+import { ExperienceLevelCard } from "./ExperienceLevelCard";
+import { NotificationPreferences } from "./NotificationPreferences";
+import { ProgressionSuggestion } from "./ProgressionSuggestion";
+import { WearableConnectionCard } from "./WearableConnectionCard";
+import { WhatsAppSettings } from "./WhatsAppSettings";
 import { WorkoutHistory } from "./WorkoutHistory";
 import { WorkoutLogger } from "./WorkoutLogger";
 import { WorkoutSummaryCards } from "./WorkoutSummaryCards";
@@ -21,9 +27,19 @@ export function WorkoutDashboard({
   bodyWeightKg: number | null;
 }) {
   const [logging, setLogging] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const stats = useWorkoutStats(fromDate, toDate);
+  const preferences = useTrainingPreferences();
 
-  if (guestActive()) {
+  const isGuest = guestActive();
+  const prefsData = preferences.data;
+
+  useEffect(() => {
+    if (isGuest || !prefsData) return;
+    runWorkoutNotifications(prefsData).catch(() => undefined);
+  }, [isGuest, prefsData]);
+
+  if (isGuest) {
     return (
       <div className="panel mt-5 p-6 text-center">
         <Dumbbell className="mx-auto size-6 text-primary" aria-hidden="true" />
@@ -61,7 +77,10 @@ export function WorkoutDashboard({
           <div className="mt-4">
             <WorkoutLogger
               bodyWeightKg={bodyWeightKg}
-              onSaved={() => setLogging(false)}
+              onSaved={() => {
+                setLogging(false);
+                if (prefsData) runWorkoutNotifications(prefsData, { force: true }).catch(() => undefined);
+              }}
               onCancel={() => setLogging(false)}
             />
           </div>
@@ -80,19 +99,48 @@ export function WorkoutDashboard({
           may not be applied yet.
         </p>
       ) : stats.data && stats.data.workouts === 0 ? (
-        <p className="panel p-6 text-center text-sm text-muted-foreground">
-          No workouts in this range yet. Log your first session to start building history — progression
-          insights unlock after several weeks of consistent logging.
-        </p>
+        <>
+          <p className="panel p-6 text-center text-sm text-muted-foreground">
+            No workouts in this range yet. Log your first session to start building history —
+            progression insights unlock after several weeks of consistent logging.
+          </p>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <ProgressionSuggestion />
+            <ExperienceLevelCard />
+          </div>
+        </>
       ) : stats.data ? (
         <>
           <WorkoutSummaryCards stats={stats.data} />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <ProgressionSuggestion />
+            <ExperienceLevelCard />
+          </div>
           <section aria-label="Workout history">
             <h2 className="mb-2 text-lg font-semibold">Workout history</h2>
             <WorkoutHistory sessions={stats.data.sessions} />
           </section>
         </>
       ) : null}
+
+      <div>
+        <button
+          type="button"
+          className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+          aria-expanded={showSettings}
+          onClick={() => setShowSettings((value) => !value)}
+        >
+          <Settings2 className="size-4" />
+          Training settings & notifications
+        </button>
+        {showSettings ? (
+          <div className="mt-3 space-y-4">
+            <NotificationPreferences />
+            <WearableConnectionCard />
+            <WhatsAppSettings />
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
