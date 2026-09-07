@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { format } from "date-fns";
-import { Camera, Sparkles, X } from "lucide-react";
+import { Camera, RotateCcw, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import { AppShell } from "@/components/app/AppShell";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useCreateMeal } from "@/lib/data";
+import {
+  useCreateMeal,
+  useMeal,
+  useMealPhotoUrl,
+  useRecentMeals,
+  useUpdateMeal,
+  type MealTemplate,
+} from "@/lib/data";
 import {
   analyzeMeal,
   parseServingToGrams,
@@ -25,7 +33,10 @@ import {
 } from "@/lib/food-estimate";
 import { MEAL_CATEGORIES } from "@/lib/nutrition";
 
+const searchSchema = z.object({ edit: z.string().optional() });
+
 export const Route = createFileRoute("/_authenticated/add-meal")({
+  validateSearch: searchSchema,
   head: () => ({
     meta: [
       { title: "Add Meal — MacroForge" },
@@ -48,20 +59,15 @@ const NO_MACROS_TOUCHED: Record<MacroKey, boolean> = {
   carbs_g: false,
   fat_g: false,
 };
+const ALL_MACROS_TOUCHED: Record<MacroKey, boolean> = {
+  calories: true,
+  protein_g: true,
+  carbs_g: true,
+  fat_g: true,
+};
 
-function AddMeal() {
-  const navigate = useNavigate();
-  const create = useCreateMeal();
-  const fileInput = useRef<HTMLInputElement>(null);
-
-  const [photo, setPhoto] = useState<File | null>(null);
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [estimate, setEstimate] = useState<MacroEstimate | null>(null);
-  const [estimating, setEstimating] = useState(false);
-  // Which macro fields the user has typed into by hand. Auto-estimation never
-  // overwrites these — only the manual "Re-estimate" button does.
-  const [touched, setTouched] = useState<Record<MacroKey, boolean>>(NO_MACROS_TOUCHED);
-  const [form, setForm] = useState({
+function makeEmptyForm() {
+  return {
     name: "",
     category: "lunch",
     serving_amount: "",
@@ -71,18 +77,94 @@ function AddMeal() {
     fat_g: "",
     notes: "",
     eaten_at: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
-  });
+  };
+}
+
+function AddMeal() {
+  const navigate = useNavigate();
+  const { edit: editId } = Route.useSearch();
+  const isEdit = !!editId;
+
+  const create = useCreateMeal();
+  const update = useUpdateMeal();
+  const editingMeal = useMeal(editId ?? null);
+  const recent = useRecentMeals();
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [existingPhotoPath, setExistingPhotoPath] = useState<string | null>(null);
+  const existingPhoto = useMealPhotoUrl(existingPhotoPath);
+  const [estimate, setEstimate] = useState<MacroEstimate | null>(null);
+  const [estimating, setEstimating] = useState(false);
+  // The edit id the form currently reflects — `undefined` until synced once.
+  const [syncedId, setSyncedId] = useState<string | null | undefined>(undefined);
+  // Which macro fields the user has typed into by hand. Auto-estimation never
+  // overwrites these — only the manual "Re-estimate" button does.
+  const [touched, setTouched] = useState<Record<MacroKey, boolean>>(NO_MACROS_TOUCHED);
+  const [form, setForm] = useState(makeEmptyForm);
+
+  const targetId = editId ?? null;
+  const ready = syncedId === targetId;
+
+  // Keep the form in sync with the route: load a meal when editing, or reset to
+  // a blank form when switching back to "new". Runs when the target id changes.
+  useEffect(() => {
+    if (ready) return;
+    if (isEdit) {
+      if (!editingMeal.data) return; // wait for the meal to load
+      const m = editingMeal.data;
+      setForm({
+        name: m.name,
+        category: m.category,
+        serving_amount: m.serving_amount ?? "",
+        calories: String(m.calories ?? ""),
+        protein_g: String(m.protein_g ?? ""),
+        carbs_g: String(m.carbs_g ?? ""),
+        fat_g: String(m.fat_g ?? ""),
+        notes: m.notes ?? "",
+        eaten_at: format(new Date(m.eaten_at), "yyyy-MM-dd'T'HH:mm"),
+      });
+      setExistingPhotoPath(m.photo_path);
+      setTouched(ALL_MACROS_TOUCHED); // keep saved numbers; don't auto-overwrite
+    } else {
+      setForm(makeEmptyForm());
+      setExistingPhotoPath(null);
+      setTouched(NO_MACROS_TOUCHED);
+    }
+    setPhoto(null);
+    setPhotoUrl(null);
+    setEstimate(null);
+    setSyncedId(targetId);
+  }, [ready, isEdit, targetId, editingMeal.data]);
 
   function pickPhoto(file: File | null) {
     setPhoto(file);
     if (photoUrl) URL.revokeObjectURL(photoUrl);
     setPhotoUrl(file ? URL.createObjectURL(file) : null);
+    if (file) setExistingPhotoPath(null);
   }
 
-  // Auto-estimate: whenever there's a food name (and, ideally, a serving size),
-  // fill calories/macros with an approximate value. Debounced so it doesn't run
-  // on every keystroke. Fields the user has edited by hand are left untouched.
+  function applyTemplate(t: MealTemplate) {
+    setForm((s) => ({
+      ...s,
+      name: t.name,
+      category: t.category,
+      serving_amount: t.serving_amount ?? "",
+      calories: String(t.calories),
+      protein_g: String(t.protein_g),
+      carbs_g: String(t.carbs_g),
+      fat_g: String(t.fat_g),
+    }));
+    setTouched(ALL_MACROS_TOUCHED);
+    setEstimate(null);
+    toast.success(`Loaded "${t.name}" — edit anything before saving`);
+  }
+
+  // Auto-estimate: whenever there's a food name, fill calories/macros with an
+  // approximate value. Debounced; fields edited by hand are left untouched.
   useEffect(() => {
+    if (!ready) return;
     const description = form.name.trim();
     if (!description) return;
 
@@ -109,7 +191,7 @@ function AddMeal() {
     }, 600);
 
     return () => window.clearTimeout(handle);
-  }, [form.name, form.serving_amount, photo, touched]);
+  }, [form.name, form.serving_amount, photo, touched, ready]);
 
   async function estimateMacros() {
     if (!form.name.trim() && !photo) {
@@ -174,22 +256,28 @@ function AddMeal() {
       }
     }
 
+    const fields = {
+      name: form.name.trim(),
+      category: form.category,
+      serving_amount: form.serving_amount.trim() || null,
+      calories: Number(calories || 0),
+      protein_g: Number(protein_g || 0),
+      carbs_g: Number(carbs_g || 0),
+      fat_g: Number(fat_g || 0),
+      notes: form.notes.trim() || null,
+      eaten_at: new Date(form.eaten_at).toISOString(),
+      is_estimate: usedEstimate !== null,
+      estimate_source: usedEstimate?.source ?? null,
+    };
+
     try {
-      await create.mutateAsync({
-        name: form.name.trim(),
-        category: form.category,
-        serving_amount: form.serving_amount.trim() || null,
-        calories: Number(calories || 0),
-        protein_g: Number(protein_g || 0),
-        carbs_g: Number(carbs_g || 0),
-        fat_g: Number(fat_g || 0),
-        notes: form.notes.trim() || null,
-        eaten_at: new Date(form.eaten_at).toISOString(),
-        is_estimate: usedEstimate !== null,
-        estimate_source: usedEstimate?.source ?? null,
-        photo,
-      });
-      toast.success("Meal saved");
+      if (isEdit && editId) {
+        await update.mutateAsync({ id: editId, ...fields, photo, photo_path: existingPhotoPath });
+        toast.success("Meal updated");
+      } else {
+        await create.mutateAsync({ ...fields, photo });
+        toast.success("Meal saved");
+      }
       navigate({ to: "/dashboard" });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save the meal");
@@ -204,9 +292,38 @@ function AddMeal() {
   ];
 
   const autoFilled = estimate !== null && !Object.values(touched).every(Boolean);
+  const previewUrl = photoUrl ?? (existingPhotoPath ? existingPhoto.data ?? null : null);
+  const saving = create.isPending || update.isPending;
+  const recentMeals = recent.data ?? [];
 
   return (
-    <AppShell title="Add Meal" subtitle="Photo optional · every estimate stays editable">
+    <AppShell
+      title={isEdit ? "Edit Meal" : "Add Meal"}
+      subtitle={isEdit ? "Update anything and save" : "Photo optional · every estimate stays editable"}
+    >
+      {!isEdit && recentMeals.length > 0 ? (
+        <div className="panel mb-4 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Repeat a recent meal</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {recentMeals.map((t) => (
+              <button
+                key={t.name}
+                type="button"
+                onClick={() => applyTemplate(t)}
+                className="rounded-full border border-border bg-card px-3 py-1.5 text-left text-xs transition-colors hover:border-primary hover:bg-secondary"
+              >
+                <span className="font-medium">{t.name}</span>
+                <span className="text-muted-foreground">
+                  {" · "}
+                  {Math.round(t.calories)} kcal
+                  {t.serving_amount ? ` · ${t.serving_amount}` : ""}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       <form onSubmit={submit} className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
         <section className="panel p-4">
           <p className="text-sm font-semibold">Meal photo</p>
@@ -221,9 +338,9 @@ function AddMeal() {
             className="hidden"
             onChange={(e) => pickPhoto(e.target.files?.[0] ?? null)}
           />
-          {photoUrl ? (
+          {previewUrl ? (
             <div className="relative mt-3">
-              <img src={photoUrl} alt="Selected meal" className="aspect-square w-full rounded-xl object-cover" />
+              <img src={previewUrl} alt="Selected meal" className="aspect-square w-full rounded-xl object-cover" />
               <Button
                 type="button"
                 size="icon"
@@ -251,8 +368,8 @@ function AddMeal() {
           </Button>
           <p className="mt-3 rounded-lg bg-secondary p-3 text-xs text-muted-foreground">
             Calories and macros fill in <strong>automatically</strong> from your food name and serving size. They are{" "}
-            <strong>approximate</strong>, not measured values — edit any number and your value is kept. Use{" "}
-            <em>Re-estimate</em> to recalculate from scratch.
+            <strong>approximate</strong>, not measured values — edit any number and your value is kept. Separate several
+            foods with <strong>+</strong> and each is added up. Use <em>Re-estimate</em> to recalculate.
           </p>
           {estimate ? (
             <p className="mt-2 text-xs text-primary">
@@ -267,10 +384,16 @@ function AddMeal() {
             <Input
               id="name"
               required
-              placeholder="Grilled chicken breast with rice"
+              list="meal-name-suggestions"
+              placeholder="Grilled chicken breast + rice + salad"
               value={form.name}
               onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
             />
+            <datalist id="meal-name-suggestions">
+              {recentMeals.map((t) => (
+                <option key={t.name} value={t.name} />
+              ))}
+            </datalist>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
@@ -360,9 +483,21 @@ function AddMeal() {
               onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))}
             />
           </div>
-          <Button type="submit" className="w-full" disabled={create.isPending}>
-            {create.isPending ? "Saving…" : "Save meal"}
-          </Button>
+          <div className="flex gap-2">
+            {isEdit ? (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => navigate({ to: "/dashboard" })}
+                className="shrink-0"
+              >
+                <RotateCcw className="size-4" /> Cancel
+              </Button>
+            ) : null}
+            <Button type="submit" className="w-full" disabled={saving}>
+              {saving ? "Saving…" : isEdit ? "Update meal" : "Save meal"}
+            </Button>
+          </div>
         </section>
       </form>
     </AppShell>

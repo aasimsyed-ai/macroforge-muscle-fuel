@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Flame, Loader2 } from "lucide-react";
+import { Flame, Loader2, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -31,6 +31,8 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
+const LAST_EMAIL_KEY = "mf:last-email";
+
 function AuthPage() {
   const { mode } = Route.useSearch();
   const navigate = useNavigate();
@@ -38,12 +40,51 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [linkBusy, setLinkBusy] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) navigate({ to: "/dashboard", replace: true });
     });
+    try {
+      const saved = localStorage.getItem(LAST_EMAIL_KEY);
+      if (saved) {
+        setEmail(saved);
+        setTab("signin");
+      }
+    } catch {
+      // storage unavailable — fine
+    }
   }, [navigate]);
+
+  function rememberEmail(value: string) {
+    try {
+      localStorage.setItem(LAST_EMAIL_KEY, value);
+    } catch {
+      // ignore
+    }
+  }
+
+  async function sendMagicLink() {
+    if (!email.trim()) {
+      toast.error("Enter your email first, then request a link.");
+      return;
+    }
+    setLinkBusy(true);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+        options: { emailRedirectTo: window.location.origin, shouldCreateUser: true },
+      });
+      if (error) throw error;
+      rememberEmail(email.trim());
+      toast.success("Login link sent — open it on this device to sign in without a password.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not send the login link");
+    } finally {
+      setLinkBusy(false);
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -56,6 +97,7 @@ function AuthPage() {
           options: { emailRedirectTo: window.location.origin },
         });
         if (error) throw error;
+        rememberEmail(email.trim());
         const { data } = await supabase.auth.getSession();
         if (data.session) {
           navigate({ to: "/dashboard", replace: true });
@@ -66,6 +108,7 @@ function AuthPage() {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        rememberEmail(email.trim());
         navigate({ to: "/dashboard", replace: true });
       }
     } catch (err) {
@@ -132,12 +175,26 @@ function AuthPage() {
           </Button>
         </form>
 
-        <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
+        <Button
+          type="button"
+          variant="ghost"
+          className="mt-2 w-full text-xs"
+          onClick={sendMagicLink}
+          disabled={linkBusy}
+        >
+          <Mail className="size-4" />
+          {linkBusy ? "Sending…" : "Email me a login link (no password)"}
+        </Button>
+
+        <div className="my-4 flex items-center gap-3 text-xs text-muted-foreground">
           <span className="h-px flex-1 bg-border" /> or <span className="h-px flex-1 bg-border" />
         </div>
         <Button variant="secondary" className="w-full" onClick={google}>
           Continue with Google
         </Button>
+        <p className="mt-3 text-center text-[11px] text-muted-foreground">
+          You stay signed in on this device — no need to log in again next time.
+        </p>
       </div>
     </div>
   );

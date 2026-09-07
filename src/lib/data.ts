@@ -185,6 +185,103 @@ export function useDeleteMeal() {
   });
 }
 
+/** Load a single meal by id — used by the edit flow. */
+export function useMeal(id: string | null) {
+  return useQuery({
+    queryKey: ["meal", id],
+    enabled: !!id,
+    queryFn: async (): Promise<Meal | null> => {
+      if (!id) return null;
+      await requireUserId();
+      const { data, error } = await supabase.from("meals").select("*").eq("id", id).maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export type MealUpdate = Omit<MealInput, "photo"> & {
+  id: string;
+  photo?: File | null;
+  /** Existing stored path, kept when no new photo is chosen. */
+  photo_path?: string | null;
+};
+
+export function useUpdateMeal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: MealUpdate) => {
+      const { id, photo, photo_path, ...rest } = input;
+      const nextPath = photo ? await uploadMealPhoto(photo) : (photo_path ?? null);
+      const { data, error } = await supabase
+        .from("meals")
+        .update({ ...rest, photo_path: nextPath })
+        .eq("id", id)
+        .select("*")
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["meals"] });
+      qc.invalidateQueries({ queryKey: ["meal"] });
+    },
+  });
+}
+
+export type MealTemplate = {
+  name: string;
+  category: string;
+  serving_amount: string | null;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  is_estimate: boolean;
+  estimate_source: string | null;
+};
+
+/**
+ * Recent distinct meals for the "repeat a meal" picker. Dedupes by lower-cased
+ * name, keeping the most recent version (and its portion / macros).
+ */
+export function useRecentMeals(limit = 12) {
+  return useQuery({
+    queryKey: ["meals", "recent-templates", limit],
+    staleTime: 1000 * 60,
+    queryFn: async (): Promise<MealTemplate[]> => {
+      const userId = await requireUserId();
+      const { data, error } = await supabase
+        .from("meals")
+        .select("name, category, serving_amount, calories, protein_g, carbs_g, fat_g, is_estimate, estimate_source, eaten_at")
+        .eq("user_id", userId)
+        .order("eaten_at", { ascending: false })
+        .limit(120);
+      if (error) throw error;
+      const seen = new Set<string>();
+      const out: MealTemplate[] = [];
+      for (const m of data ?? []) {
+        const key = m.name.trim().toLowerCase();
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        out.push({
+          name: m.name,
+          category: m.category,
+          serving_amount: m.serving_amount,
+          calories: Number(m.calories),
+          protein_g: Number(m.protein_g),
+          carbs_g: Number(m.carbs_g),
+          fat_g: Number(m.fat_g),
+          is_estimate: m.is_estimate,
+          estimate_source: m.estimate_source,
+        });
+        if (out.length >= limit) break;
+      }
+      return out;
+    },
+  });
+}
+
 export function useMealPhotoUrl(path: string | null) {
   return useQuery({
     queryKey: ["meal-photo", path],

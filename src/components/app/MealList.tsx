@@ -1,5 +1,6 @@
+import { Link } from "@tanstack/react-router";
 import { format } from "date-fns";
-import { ImageIcon, Trash2 } from "lucide-react";
+import { ImageIcon, Pencil, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -55,15 +56,22 @@ export function MealList({ meals }: { meals: Meal[] }) {
             </p>
             {m.notes ? <p className="mt-1 text-xs text-muted-foreground">{m.notes}</p> : null}
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={`Delete ${m.name}`}
-            disabled={del.isPending}
-            onClick={() => del.mutate(m.id)}
-          >
-            <Trash2 className="size-4" />
-          </Button>
+          <div className="flex shrink-0 items-center">
+            <Button asChild variant="ghost" size="icon" aria-label={`Edit ${m.name}`}>
+              <Link to="/add-meal" search={{ edit: m.id }}>
+                <Pencil className="size-4" />
+              </Link>
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={`Delete ${m.name}`}
+              disabled={del.isPending}
+              onClick={() => del.mutate(m.id)}
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
         </li>
       ))}
     </ul>
