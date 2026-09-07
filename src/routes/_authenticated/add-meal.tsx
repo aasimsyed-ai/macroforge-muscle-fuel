@@ -32,7 +32,7 @@ export const Route = createFileRoute("/_authenticated/add-meal")({
       { property: "og:description", content: "Photo-assisted meal logging with editable macro estimates." },
     ],
   }),
-  component: AddMeal;
+  component: AddMeal,
 });
 
 function AddMeal() {

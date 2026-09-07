@@ -50,7 +50,10 @@ function Dashboard() {
   const search = Route.useSearch();
   const navigate = useNavigate();
   const rangeKey: RangeKey = search.range ?? "today";
-  const range = resolveRange(rangeKey, { from: search.from, to: search.to });
+  const range = resolveRange(rangeKey, {
+    ...(search.from ? { from: search.from } : {}),
+    ...(search.to ? { to: search.to } : {}),
+  });
 
   const profile = useProfile();
   const goalsQuery = useGoals();
