@@ -152,7 +152,8 @@ export function WorkoutExerciseForm({
           </Label>
           <Input
             id={`equipment-${index}`}
-            placeholder="Barbell / Dumbbell / Cable"
+            list="workout-equipment-options"
+            placeholder="Select or type — Barbell, Dumbbell…"
             value={exercise.equipment ?? ""}
             onChange={(event) => onChange({ equipment: event.target.value.trim() || null })}
           />
@@ -164,7 +165,8 @@ export function WorkoutExerciseForm({
           </Label>
           <Input
             id={`variant-${index}`}
-            placeholder="Incline / Close-grip / Paused"
+            list="workout-variant-options"
+            placeholder="Select or type — Incline, Close-Grip…"
             value={exercise.exerciseVariant ?? ""}
             onChange={(event) => onChange({ exerciseVariant: event.target.value.trim() || null })}
           />

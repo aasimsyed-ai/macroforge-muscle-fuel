@@ -42,6 +42,35 @@ export const MUSCLE_GROUPS = [
   "Other",
 ] as const;
 
+/** Common gym equipment — offered as a dropdown, but the field still accepts free text. */
+export const EQUIPMENT_OPTIONS = [
+  "Barbell",
+  "Dumbbell",
+  "Machine",
+  "Cable",
+  "Smith Machine",
+  "Kettlebell",
+  "EZ Bar",
+  "Resistance Band",
+  "Bodyweight",
+] as const;
+
+/** Common exercise variants — offered as a dropdown, but the field still accepts free text. */
+export const VARIANT_OPTIONS = [
+  "Flat",
+  "Incline",
+  "Decline",
+  "Close-Grip",
+  "Wide-Grip",
+  "Single-Arm",
+  "Seated",
+  "Standing",
+  "Paused",
+  "Reverse-Grip",
+  "Sumo",
+  "Deficit",
+] as const;
+
 export const WEIGHT_MODES: ReadonlyArray<{ value: WeightMode; label: string }> = [
   { value: "external", label: "External load" },
   { value: "bodyweight", label: "Bodyweight" },

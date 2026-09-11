@@ -41,6 +41,13 @@ export function useCreateWorkout() {
   });
 }
 
+export function useRecentWorkoutSessions() {
+  return useQuery({
+    queryKey: [...WORKOUT_KEY, "recent-sessions"],
+    queryFn: () => api.fetchRecentWorkoutSessions(10),
+  });
+}
+
 export function useDeleteWorkout() {
   const qc = useQueryClient();
   return useMutation({

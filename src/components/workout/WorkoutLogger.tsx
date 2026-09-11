@@ -14,9 +14,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import * as workoutApi from "@/lib/workouts/api";
 import { calculateSessionVolume, calculateWorkoutCalories } from "@/lib/workouts/calculations";
-import { INTENSITIES } from "@/lib/workouts/constants";
-import { useCreateWorkout, useExerciseCatalog, useTrainingPreferences } from "@/lib/workouts/hooks";
+import { EQUIPMENT_OPTIONS, INTENSITIES, VARIANT_OPTIONS } from "@/lib/workouts/constants";
+import {
+  useCreateWorkout,
+  useExerciseCatalog,
+  useRecentWorkoutSessions,
+  useTrainingPreferences,
+} from "@/lib/workouts/hooks";
 import type {
   WorkoutExerciseDraft,
   WorkoutIntensity,
@@ -59,11 +65,13 @@ export function WorkoutLogger({
 }) {
   const catalog = useExerciseCatalog();
   const preferences = useTrainingPreferences();
+  const recentSessions = useRecentWorkoutSessions();
   const create = useCreateWorkout();
 
   const [draft, setDraft] = useState<WorkoutSessionDraft>(initialDraft);
   const [errors, setErrors] = useState<string[]>([]);
   const [showWearable, setShowWearable] = useState(false);
+  const [copyingSessionId, setCopyingSessionId] = useState<string | null>(null);
   const phaseTouched = useRef(false);
   const submittingRef = useRef(false);
 
@@ -104,6 +112,25 @@ export function WorkoutLogger({
 
   function addExercise() {
     setDraft((current) => ({ ...current, exercises: [...current.exercises, newExerciseDraft()] }));
+  }
+
+  async function copyFromSession(sessionId: string) {
+    if (!sessionId) return;
+    setCopyingSessionId(sessionId);
+    try {
+      const detail = await workoutApi.fetchWorkoutSessionById(sessionId);
+      if (!detail || detail.exercises.length === 0) {
+        toast.error("That workout has no exercises to copy.");
+        return;
+      }
+      const exercises = workoutApi.sessionDetailToExerciseDrafts(detail);
+      setDraft((current) => ({ ...current, exercises }));
+      toast.success("Loaded — update the weights and save.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load that workout.");
+    } finally {
+      setCopyingSessionId(null);
+    }
   }
 
   function removeExercise(index: number) {
@@ -211,6 +238,44 @@ export function WorkoutLogger({
         </div>
       </div>
 
+      {recentSessions.data && recentSessions.data.length > 0 ? (
+        <div className="space-y-1 rounded-lg border border-dashed border-border p-3">
+          <Label htmlFor="copy-previous-workout" className="text-xs">
+            Copy from a previous workout
+          </Label>
+          <Select
+            value=""
+            disabled={copyingSessionId !== null}
+            onValueChange={(value) => void copyFromSession(value)}
+          >
+            <SelectTrigger id="copy-previous-workout">
+              <SelectValue
+                placeholder={
+                  copyingSessionId ? "Loading…" : "Select a past workout to reuse its exercises"
+                }
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {recentSessions.data.map((session) => {
+                const names = session.exerciseNames;
+                const label =
+                  names.length > 3
+                    ? `${names.slice(0, 3).join(", ")} +${names.length - 3} more`
+                    : names.join(", ") || "No exercises";
+                return (
+                  <SelectItem key={session.id} value={session.id}>
+                    {format(new Date(`${session.workoutDate}T00:00:00`), "d MMM")} — {label}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+          <p className="text-[11px] text-muted-foreground">
+            Loads the same exercises and sets so you only need to update weights and reps.
+          </p>
+        </div>
+      ) : null}
+
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold">Exercises</p>
@@ -221,6 +286,16 @@ export function WorkoutLogger({
         <datalist id="workout-exercise-catalog">
           {(catalog.data ?? []).map((item) => (
             <option key={item.id} value={item.name} />
+          ))}
+        </datalist>
+        <datalist id="workout-equipment-options">
+          {EQUIPMENT_OPTIONS.map((option) => (
+            <option key={option} value={option} />
+          ))}
+        </datalist>
+        <datalist id="workout-variant-options">
+          {VARIANT_OPTIONS.map((option) => (
+            <option key={option} value={option} />
           ))}
         </datalist>
         {draft.exercises.map((exercise, index) => (

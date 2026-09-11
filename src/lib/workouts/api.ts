@@ -10,6 +10,8 @@ import type {
   ExerciseCatalogItem,
   ExperienceLevel,
   TrainingPreferences,
+  WeightMode,
+  WorkoutExerciseDraft,
   WorkoutSessionDraft,
   WorkoutSessionRecord,
 } from "./types";
@@ -208,6 +210,76 @@ export async function deleteWorkoutSession(id: string): Promise<void> {
     .eq("id", id)
     .eq("user_id", user.id);
   if (error) throw error;
+}
+
+/* --------------------------- repeat a past workout ------------------------- */
+
+export interface RecentWorkoutSessionSummary {
+  id: string;
+  workoutDate: string;
+  exerciseNames: string[];
+}
+
+/** Recent sessions for the "copy from a previous workout" picker. */
+export async function fetchRecentWorkoutSessions(limit = 10): Promise<RecentWorkoutSessionSummary[]> {
+  const user = await requireUser();
+  const { data: sessions, error } = await supabase
+    .from("workout_sessions")
+    .select("id, workout_date")
+    .eq("user_id", user.id)
+    .order("workout_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+
+  const rows = sessions ?? [];
+  if (rows.length === 0) return [];
+
+  const sessionIds = rows.map((row) => row.id);
+  const { data: exerciseRows, error: exerciseError } = await supabase
+    .from("workout_exercises")
+    .select("session_id, exercise_name, exercise_order")
+    .in("session_id", sessionIds)
+    .order("exercise_order", { ascending: true });
+  if (exerciseError) throw exerciseError;
+
+  const namesBySession = new Map<string, string[]>();
+  for (const row of exerciseRows ?? []) {
+    const list = namesBySession.get(row.session_id) ?? [];
+    list.push(row.exercise_name);
+    namesBySession.set(row.session_id, list);
+  }
+
+  return rows.map((row) => ({
+    id: row.id,
+    workoutDate: row.workout_date,
+    exerciseNames: namesBySession.get(row.id) ?? [],
+  }));
+}
+
+/** Turn a saved session's exercises/sets back into editable drafts, so the user only needs to update weights. */
+export function sessionDetailToExerciseDrafts(detail: WorkoutSessionDetail): WorkoutExerciseDraft[] {
+  return detail.exercises.map((exercise) => ({
+    muscleGroup: exercise.muscle_group,
+    exerciseName: exercise.exercise_name,
+    exerciseVariant: exercise.exercise_variant,
+    equipment: exercise.equipment,
+    exerciseCatalogId: exercise.exercise_catalog_id,
+    isBodyweight: exercise.sets.some((set) => set.weight_mode === "bodyweight"),
+    sets: exercise.sets
+      .slice()
+      .sort((a, b) => a.set_number - b.set_number)
+      .map((set, index) => ({
+        setNumber: index + 1,
+        reps: set.reps,
+        weightKg: set.weight_kg,
+        weightMode: (set.weight_mode as WeightMode) || "external",
+        rir: set.rir,
+        rpe: set.rpe,
+        completed: true,
+        restSeconds: set.rest_seconds,
+      })),
+  }));
 }
 
 export interface WorkoutRangeStats {
