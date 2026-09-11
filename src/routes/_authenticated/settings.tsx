@@ -17,6 +17,15 @@ import { Switch } from "@/components/ui/switch";
 import { useCelebrationPreference } from "@/lib/celebrationPreference";
 import { useGoals, useProfile, useUpdateGoals, useUpdateProfile } from "@/lib/data";
 import { GOAL_TYPES } from "@/lib/nutrition";
+import {
+  fetchPushPreferences,
+  getPermissionState,
+  isPushSupported,
+  savePushQuietHours,
+  sendTestPush,
+  subscribeToPush,
+  unsubscribeFromPush,
+} from "@/lib/push";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({
@@ -58,6 +67,63 @@ function SettingsPage() {
   const updateProfile = useUpdateProfile();
   const updateGoals = useUpdateGoals();
   const [celebrationFx, setCelebrationFx] = useCelebrationPreference();
+
+  const pushSupported = isPushSupported();
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [quietStart, setQuietStart] = useState("");
+  const [quietEnd, setQuietEnd] = useState("");
+  const [testSending, setTestSending] = useState(false);
+
+  useEffect(() => {
+    if (!pushSupported) return;
+    fetchPushPreferences()
+      .then((prefs) => {
+        setPushEnabled(prefs.enabled);
+        setQuietStart(prefs.quietHoursStart?.slice(0, 5) ?? "");
+        setQuietEnd(prefs.quietHoursEnd?.slice(0, 5) ?? "");
+      })
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pushSupported]);
+
+  async function togglePush(next: boolean) {
+    setPushBusy(true);
+    try {
+      if (next) {
+        await subscribeToPush();
+        toast.success("Push notifications enabled");
+      } else {
+        await unsubscribeFromPush();
+        toast.success("Push notifications turned off");
+      }
+      setPushEnabled(next);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not update push notifications");
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function saveQuietHours(start: string, end: string) {
+    try {
+      await savePushQuietHours(start ? `${start}:00` : null, end ? `${end}:00` : null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save quiet hours");
+    }
+  }
+
+  async function sendTest() {
+    setTestSending(true);
+    try {
+      await sendTestPush();
+      toast.success("Test notification requested");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Push delivery isn't set up yet");
+    } finally {
+      setTestSending(false);
+    }
+  }
 
   const [goalForm, setGoalForm] = useState<Record<string, string>>({});
   const [goalType, setGoalType] = useState("lean_bulk");
@@ -221,6 +287,65 @@ function SettingsPage() {
           onCheckedChange={setCelebrationFx}
         />
       </div>
+
+      {pushSupported ? (
+        <div className="panel mt-4 space-y-3 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold">Push notifications</p>
+              <p className="text-xs text-muted-foreground">
+                Real browser push, off by default. Delivery is disabled while this is being
+                finished — enabling this saves your subscription but nothing sends yet.
+              </p>
+            </div>
+            <Switch
+              id="push-enabled"
+              aria-label="Push notifications"
+              checked={pushEnabled}
+              disabled={pushBusy || getPermissionState() === "denied"}
+              onCheckedChange={togglePush}
+            />
+          </div>
+          {getPermissionState() === "denied" ? (
+            <p className="text-xs text-destructive">
+              Notifications are blocked for this site in your browser settings.
+            </p>
+          ) : null}
+          {pushEnabled ? (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="push-quiet-start" className="text-xs">
+                    Quiet hours start
+                  </Label>
+                  <Input
+                    id="push-quiet-start"
+                    type="time"
+                    value={quietStart}
+                    onChange={(e) => setQuietStart(e.target.value)}
+                    onBlur={() => saveQuietHours(quietStart, quietEnd)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="push-quiet-end" className="text-xs">
+                    Quiet hours end
+                  </Label>
+                  <Input
+                    id="push-quiet-end"
+                    type="time"
+                    value={quietEnd}
+                    onChange={(e) => setQuietEnd(e.target.value)}
+                    onBlur={() => saveQuietHours(quietStart, quietEnd)}
+                  />
+                </div>
+              </div>
+              <Button type="button" variant="secondary" size="sm" onClick={sendTest} disabled={testSending}>
+                {testSending ? "Sending…" : "Send a test notification"}
+              </Button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
     </AppShell>
   );
 }

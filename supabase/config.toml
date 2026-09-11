@@ -4,3 +4,8 @@ project_id = "spcnwgkzeopmztmygmhx"
 # users, so it must not require a Supabase JWT.
 [functions.analyze-food]
 verify_jwt = false
+
+# Push delivery — only ever sends to the calling (authenticated) user's own
+# subscriptions, so this keeps the default JWT verification on.
+[functions.send-push]
+verify_jwt = true
