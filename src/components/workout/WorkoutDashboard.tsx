@@ -118,7 +118,7 @@ export function WorkoutDashboard({
           </div>
           <section aria-label="Workout history">
             <h2 className="mb-2 text-lg font-semibold">Workout history</h2>
-            <WorkoutHistory sessions={stats.data.sessions} />
+            <WorkoutHistory sessions={stats.data.sessions} bodyWeightKg={bodyWeightKg} />
           </section>
         </>
       ) : null}

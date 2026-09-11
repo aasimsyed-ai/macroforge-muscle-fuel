@@ -41,6 +41,18 @@ export function useCreateWorkout() {
   });
 }
 
+export function useReplaceWorkout() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { oldId: string; draft: WorkoutSessionDraft; bodyWeightKg: number | null }) =>
+      api.replaceWorkoutSession(vars.oldId, vars.draft, vars.bodyWeightKg),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: WORKOUT_KEY });
+      qc.invalidateQueries({ queryKey: NOTIFICATION_KEY });
+    },
+  });
+}
+
 export function useRecentWorkoutSessions() {
   return useQuery({
     queryKey: [...WORKOUT_KEY, "recent-sessions"],

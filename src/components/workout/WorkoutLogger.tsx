@@ -21,6 +21,7 @@ import {
   useCreateWorkout,
   useExerciseCatalog,
   useRecentWorkoutSessions,
+  useReplaceWorkout,
   useTrainingPreferences,
 } from "@/lib/workouts/hooks";
 import type {
@@ -56,27 +57,40 @@ function toNumberOrNull(raw: string): number | null {
 
 export function WorkoutLogger({
   bodyWeightKg,
+  initialData,
   onSaved,
   onCancel,
 }: {
   bodyWeightKg: number | null;
+  /** When set, the logger edits this saved session instead of creating a new one. */
+  initialData?: { sessionId: string; draft: WorkoutSessionDraft };
   onSaved?: () => void;
   onCancel?: () => void;
 }) {
+  const isEditing = !!initialData;
   const catalog = useExerciseCatalog();
   const preferences = useTrainingPreferences();
   const recentSessions = useRecentWorkoutSessions();
   const create = useCreateWorkout();
+  const replace = useReplaceWorkout();
 
-  const [draft, setDraft] = useState<WorkoutSessionDraft>(initialDraft);
+  const [draft, setDraft] = useState<WorkoutSessionDraft>(() => initialData?.draft ?? initialDraft());
   const [errors, setErrors] = useState<string[]>([]);
-  const [showWearable, setShowWearable] = useState(false);
+  const [showWearable, setShowWearable] = useState(
+    () =>
+      isEditing &&
+      (initialData?.draft.wearableCaloriesBurned != null ||
+        initialData?.draft.averageHeartRate != null ||
+        initialData?.draft.maxHeartRate != null),
+  );
   const [copyingSessionId, setCopyingSessionId] = useState<string | null>(null);
   // Bumped whenever `draft.exercises` is replaced wholesale (copy-from-previous,
   // post-save reset) so exercise/set rows remount and drop stale local UI state
   // (e.g. a weight input's "custom vs preset" toggle) instead of reusing it by index.
   const [draftVersion, setDraftVersion] = useState(0);
-  const phaseTouched = useRef(false);
+  // Editing a saved session already has its own training phase — don't let the
+  // "apply my default phase" effect below silently overwrite it.
+  const phaseTouched = useRef(isEditing);
   const submittingRef = useRef(false);
 
   useEffect(() => {
@@ -150,7 +164,7 @@ export function WorkoutLogger({
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (submittingRef.current || create.isPending) return;
+    if (submittingRef.current || saving) return;
 
     const result = validateWorkoutDraft(draft);
     if (!result.ok) {
@@ -161,20 +175,29 @@ export function WorkoutLogger({
     setErrors([]);
     submittingRef.current = true;
     try {
-      await create.mutateAsync({ draft, bodyWeightKg });
-      toast.success("Workout saved");
-      setDraft(initialDraft());
-      setDraftVersion((v) => v + 1);
-      phaseTouched.current = false;
+      if (isEditing && initialData) {
+        await replace.mutateAsync({ oldId: initialData.sessionId, draft, bodyWeightKg });
+        toast.success("Workout updated");
+      } else {
+        await create.mutateAsync({ draft, bodyWeightKg });
+        toast.success("Workout saved");
+        setDraft(initialDraft());
+        setDraftVersion((v) => v + 1);
+        phaseTouched.current = false;
+      }
       onSaved?.();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save the workout");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : `Could not ${isEditing ? "update" : "save"} the workout`,
+      );
     } finally {
       submittingRef.current = false;
     }
   }
 
-  const saving = create.isPending;
+  const saving = isEditing ? replace.isPending : create.isPending;
 
   return (
     <form onSubmit={submit} className="space-y-4">
@@ -244,7 +267,7 @@ export function WorkoutLogger({
         </div>
       </div>
 
-      {recentSessions.data && recentSessions.data.length > 0 ? (
+      {!isEditing && recentSessions.data && recentSessions.data.length > 0 ? (
         <div className="space-y-1 rounded-lg border border-dashed border-border p-3">
           <Label htmlFor="copy-previous-workout" className="text-xs">
             Copy from a previous workout
@@ -434,7 +457,7 @@ export function WorkoutLogger({
           </Button>
         ) : null}
         <Button type="submit" className="flex-1" disabled={saving}>
-          {saving ? "Saving…" : "Save workout"}
+          {saving ? "Saving…" : isEditing ? "Save changes" : "Save workout"}
         </Button>
       </div>
     </form>

@@ -276,10 +276,41 @@ export function sessionDetailToExerciseDrafts(detail: WorkoutSessionDetail): Wor
         weightMode: (set.weight_mode as WeightMode) || "external",
         rir: set.rir,
         rpe: set.rpe,
-        completed: true,
+        completed: set.completed,
         restSeconds: set.rest_seconds,
       })),
   }));
+}
+
+/** Turn a saved session back into a fully editable draft (session fields + exercises/sets). */
+export function sessionDetailToDraft(detail: WorkoutSessionDetail): WorkoutSessionDraft {
+  return {
+    workoutDate: detail.workout_date,
+    durationMinutes: detail.duration_minutes,
+    intensity: detail.intensity ?? "moderate",
+    trainingPhase: detail.training_phase ?? "hypertrophy",
+    notes: detail.notes ?? "",
+    wearableCaloriesBurned:
+      detail.calories_source === "wearable" ? detail.wearable_calories_burned : null,
+    averageHeartRate: detail.average_heart_rate,
+    maxHeartRate: detail.max_heart_rate,
+    exercises: sessionDetailToExerciseDrafts(detail),
+  };
+}
+
+/**
+ * Edit a saved workout. The RPC only ever appends, so an edit is implemented as
+ * create-the-replacement-then-remove-the-original — in that order, so a failure
+ * never loses data (worst case is a harmless duplicate the user can delete).
+ */
+export async function replaceWorkoutSession(
+  oldId: string,
+  draft: WorkoutSessionDraft,
+  bodyWeightKg: number | null,
+): Promise<WorkoutSessionRecord> {
+  const next = await createWorkoutSession(draft, bodyWeightKg);
+  await deleteWorkoutSession(oldId).catch(() => undefined);
+  return next;
 }
 
 export interface WorkoutRangeStats {

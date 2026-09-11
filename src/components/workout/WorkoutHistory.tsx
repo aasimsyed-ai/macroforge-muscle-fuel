@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { format } from "date-fns";
-import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { WorkoutSession } from "@/lib/workouts/api";
+import { sessionDetailToDraft, type WorkoutSession } from "@/lib/workouts/api";
 import { useDeleteWorkout, useWorkoutSession } from "@/lib/workouts/hooks";
+
+import { WorkoutLogger } from "./WorkoutLogger";
 
 function sessionCalories(session: WorkoutSession): string {
   if (session.calories_source === "wearable" && session.wearable_calories_burned != null) {
@@ -64,8 +66,47 @@ function SessionDetail({ id }: { id: string }) {
   );
 }
 
-export function WorkoutHistory({ sessions }: { sessions: WorkoutSession[] }) {
+function EditSessionForm({
+  id,
+  bodyWeightKg,
+  onDone,
+}: {
+  id: string;
+  bodyWeightKg: number | null;
+  onDone: () => void;
+}) {
+  const detail = useWorkoutSession(id);
+
+  if (detail.isLoading) {
+    return <Skeleton className="mt-2 h-40 w-full rounded-md" />;
+  }
+  if (detail.isError || !detail.data) {
+    return (
+      <p className="mt-2 text-xs text-muted-foreground">Could not load this workout to edit.</p>
+    );
+  }
+
+  return (
+    <div className="mt-2">
+      <WorkoutLogger
+        bodyWeightKg={bodyWeightKg}
+        initialData={{ sessionId: id, draft: sessionDetailToDraft(detail.data) }}
+        onSaved={onDone}
+        onCancel={onDone}
+      />
+    </div>
+  );
+}
+
+export function WorkoutHistory({
+  sessions,
+  bodyWeightKg,
+}: {
+  sessions: WorkoutSession[];
+  bodyWeightKg: number | null;
+}) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const remove = useDeleteWorkout();
 
   if (sessions.length === 0) {
@@ -81,6 +122,7 @@ export function WorkoutHistory({ sessions }: { sessions: WorkoutSession[] }) {
     try {
       await remove.mutateAsync(id);
       if (openId === id) setOpenId(null);
+      if (editingId === id) setEditingId(null);
       toast.success("Workout deleted");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not delete the workout");
@@ -91,16 +133,17 @@ export function WorkoutHistory({ sessions }: { sessions: WorkoutSession[] }) {
     <ul className="space-y-2">
       {sessions.map((session) => {
         const open = openId === session.id;
+        const editing = editingId === session.id;
         return (
           <li key={session.id} className="panel p-3">
             <div className="flex items-start justify-between gap-2">
               <button
                 type="button"
                 className="flex flex-1 items-start gap-2 text-left"
-                aria-expanded={open}
+                aria-expanded={open || editing}
                 onClick={() => setOpenId(open ? null : session.id)}
               >
-                {open ? (
+                {open || editing ? (
                   <ChevronDown className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                 ) : (
                   <ChevronRight className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
@@ -122,19 +165,41 @@ export function WorkoutHistory({ sessions }: { sessions: WorkoutSession[] }) {
                   </p>
                 </div>
               </button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="size-8 shrink-0"
-                aria-label="Delete workout"
-                disabled={remove.isPending}
-                onClick={() => handleDelete(session.id)}
-              >
-                <Trash2 className="size-4" />
-              </Button>
+              <div className="flex shrink-0 items-center gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-8"
+                  aria-label={editing ? "Cancel edit" : "Edit workout"}
+                  aria-pressed={editing}
+                  disabled={remove.isPending}
+                  onClick={() => setEditingId(editing ? null : session.id)}
+                >
+                  <Pencil className="size-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-8"
+                  aria-label="Delete workout"
+                  disabled={remove.isPending}
+                  onClick={() => handleDelete(session.id)}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
             </div>
-            {open ? <SessionDetail id={session.id} /> : null}
+            {editing ? (
+              <EditSessionForm
+                id={session.id}
+                bodyWeightKg={bodyWeightKg}
+                onDone={() => setEditingId(null)}
+              />
+            ) : open ? (
+              <SessionDetail id={session.id} />
+            ) : null}
           </li>
         );
       })}
