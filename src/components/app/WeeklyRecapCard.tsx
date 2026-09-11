@@ -28,12 +28,15 @@ export function WeeklyRecapCard() {
   const thisWeek = useMemo(() => resolveRange("this_week"), []);
   const lastWeek = useMemo(() => resolveRange("last_week"), []);
 
-  const thisMeals = useMeals(thisWeek.from, thisWeek.to);
-  const lastMeals = useMeals(lastWeek.from, lastWeek.to);
-  const thisMetrics = useMetrics(thisWeek.from, thisWeek.to);
+  // Only fetch once the card is actually expanded — no point spending four
+  // queries on a section most visits will never open.
+  const thisMeals = useMeals(thisWeek.from, thisWeek.to, { enabled: open });
+  const lastMeals = useMeals(lastWeek.from, lastWeek.to, { enabled: open });
+  const thisMetrics = useMetrics(thisWeek.from, thisWeek.to, { enabled: open });
   const thisWorkouts = useWorkoutStats(
     format(thisWeek.from, "yyyy-MM-dd"),
     format(thisWeek.to, "yyyy-MM-dd"),
+    { enabled: open },
   );
 
   const loading = thisMeals.isLoading || lastMeals.isLoading || thisMetrics.isLoading;
@@ -77,6 +80,10 @@ export function WeeklyRecapCard() {
       {open ? (
         loading ? (
           <Skeleton className="mt-3 h-32 w-full rounded-md" />
+        ) : totals.count === 0 && workouts === 0 ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Nothing logged yet this week — log a meal or a workout and check back here.
+          </p>
         ) : (
           <div className="mt-3 space-y-1.5 text-sm">
             <Row label="Calories average" value={`${Math.round(avgCalories)} kcal`} />

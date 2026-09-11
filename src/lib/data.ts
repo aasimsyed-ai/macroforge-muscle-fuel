@@ -130,9 +130,10 @@ export function useUpdateGoals() {
 
 /* ----------------------------------- meals ---------------------------------- */
 
-export function useMeals(from: Date, to: Date) {
+export function useMeals(from: Date, to: Date, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["meals", from.toISOString(), to.toISOString()],
+    enabled: options?.enabled ?? true,
     queryFn: async (): Promise<Meal[]> => {
       if (guestActive()) return guestListMeals(from, to);
       const userId = await requireUserId();
@@ -342,9 +343,10 @@ export function useMealPhotoUrl(path: string | null) {
 
 /* ------------------------------- daily metrics ------------------------------ */
 
-export function useMetrics(from: Date, to: Date) {
+export function useMetrics(from: Date, to: Date, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["metrics", format(from, "yyyy-MM-dd"), format(to, "yyyy-MM-dd")],
+    enabled: options?.enabled ?? true,
     queryFn: async (): Promise<DailyMetric[]> => {
       if (guestActive()) return guestListMetrics(from, to);
       const userId = await requireUserId();

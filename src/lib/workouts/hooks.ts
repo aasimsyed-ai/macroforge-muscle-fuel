@@ -14,9 +14,10 @@ export function useExerciseCatalog() {
   });
 }
 
-export function useWorkoutStats(fromDate: string, toDate: string) {
+export function useWorkoutStats(fromDate: string, toDate: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: [...WORKOUT_KEY, "stats", fromDate, toDate],
+    enabled: options?.enabled ?? true,
     queryFn: () => api.fetchWorkoutStats(fromDate, toDate),
   });
 }
