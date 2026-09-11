@@ -69,7 +69,7 @@ export function WorkoutDashboard({
           </div>
           {!logging ? (
             <Button type="button" size="sm" onClick={() => setLogging(true)}>
-              <Plus className="size-4" /> New workout
+              <Plus className="size-4" /> Log workout
             </Button>
           ) : null}
         </div>
