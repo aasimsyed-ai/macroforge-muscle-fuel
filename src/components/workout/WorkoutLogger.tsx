@@ -16,7 +16,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import * as workoutApi from "@/lib/workouts/api";
 import { calculateSessionVolume, calculateWorkoutCalories } from "@/lib/workouts/calculations";
-import { EQUIPMENT_OPTIONS, INTENSITIES, VARIANT_OPTIONS } from "@/lib/workouts/constants";
+import { INTENSITIES } from "@/lib/workouts/constants";
 import {
   useCreateWorkout,
   useExerciseCatalog,
@@ -283,21 +283,6 @@ export function WorkoutLogger({
             <span className="text-[11px] text-muted-foreground">Exercise list unavailable</span>
           ) : null}
         </div>
-        <datalist id="workout-exercise-catalog">
-          {(catalog.data ?? []).map((item) => (
-            <option key={item.id} value={item.name} />
-          ))}
-        </datalist>
-        <datalist id="workout-equipment-options">
-          {EQUIPMENT_OPTIONS.map((option) => (
-            <option key={option} value={option} />
-          ))}
-        </datalist>
-        <datalist id="workout-variant-options">
-          {VARIANT_OPTIONS.map((option) => (
-            <option key={option} value={option} />
-          ))}
-        </datalist>
         {draft.exercises.map((exercise, index) => (
           <WorkoutExerciseForm
             key={index}
