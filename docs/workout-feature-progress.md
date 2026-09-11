@@ -1,9 +1,28 @@
 # Workout Feature Progress
 
-- Current phase: Phase 5/5 — COMPLETE (pending user actions below)
-- Overall progress: 100% of what is possible without the DB migration being run and without paid external providers
-- Current action: all five phases implemented, pushed, and verified green on Lovable's remote build; production deploy done.
-- Immediate next step: user runs the migration SQL; then the workout feature is live end-to-end.
+- Current phase: Phase 5/5 — COMPLETE, migration applied, live in production, audited.
+- Overall progress: 100%. Migration is applied (2026-09-11) and the feature is live end-to-end.
+- Current action: none — final audit (2026-09-11) complete, bugs fixed, deployed and verified.
+
+## Post-launch audit — 2026-09-11
+Full bug hunt / gap analysis across the workout feature per user request. No local Node toolchain in this environment, so correctness was verified by manual code review plus Lovable's remote `vite build` (the project's only typecheck signal) — green at commit `f16dfa2`.
+
+**Bugs found and fixed:**
+1. **Stale weight-input widget after "copy from a previous workout."** `WorkoutSetEditor`'s custom-vs-preset weight toggle was a `useState` lazy initializer with no re-sync, and `WorkoutExerciseForm`/`WorkoutSetEditor` were keyed by array index. Copying a previous session replaces `draft.exercises` in place (same keys), so a copied set with a non-ladder weight (e.g. 27.5 kg) could render the preset dropdown showing "Select weight" while the real value was already 27.5 — correct data, wrong widget. Fixed in `WorkoutLogger.tsx` by adding a `draftVersion` counter bumped on copy and on post-save reset, folded into the exercise list's `key`, forcing a clean remount (and fresh local UI state) whenever the draft is replaced wholesale.
+2. **Notification "one per category per day" cap reset at UTC midnight, not the viewer's local midnight.** `filterNotificationDrafts` computed `todayKey` via `.toISOString().slice(0,10)`. Fixed in `notifications.ts` with a `localDateKey()` helper using local `Date` components; updated `tests/workouts/notifications.test.ts` (one fixture's `created_at` was UTC-Z and depended on the runner's timezone to land on the right day — changed to a local, unambiguous same-day timestamp).
+
+**Confirmed correct, not bugs (checked because the audit asked):**
+- Calorie double-counting: `calculateWorkoutCalories` always returns exactly one source (wearable XOR estimated), never summed.
+- Orphaned rows on delete: all three child tables (`workout_exercises`, `workout_sets`, plus `notifications.related_workout_id`) use `ON DELETE CASCADE`/`SET NULL` — deleting a session cannot leave orphans.
+- RLS: every workout table has `auth.uid() = user_id` policies; `create_workout_session` reads `auth.uid()` server-side and never trusts a client-supplied user id; `exercise_catalog` is read-only to authenticated users.
+- "Insufficient data" messaging: each failure path in `analyzeExerciseProgression` returns a distinct, specific explanation string, surfaced as-is in `ProgressionSuggestion`.
+- Tracking-mode persistence: `useTrackingMode` correctly persists to `localStorage` and restores on refresh (starts as `"food"` for one frame by design, to keep SSR/first client render in sync, then corrects in an effect — documented in the code, not a bug).
+- Indexes: all hot query paths (`workout_sessions` by user+date, `workout_exercises` by session and by user+lower(name), `workout_sets` by exercise, `notifications` by user+date and the dedupe key) are covered.
+
+**Architectural gap found, not auto-fixed (flagged only — touches existing food-tracking UI the spec says not to redesign):**
+- `daily_metrics.workout_minutes` / `workout_type` (a free-text quick-log pair from the original food-tracking MVP, still shown in the Food dashboard's daily quick log) is completely disconnected from the new structured Workout Tracking feature. Two unrelated places now record "I worked out" with no reconciliation. Left as-is and reported to the user as a recommended next step, since resolving it means changing existing food-tracking UI/behavior.
+
+**Minor, low-priority, not fixed:** `fetchExerciseHistory`'s `.ilike(exercise_name, name)` won't necessarily use the `lower(exercise_name)` functional index at large per-user row counts (ILIKE vs. an `=`-on-`lower()` predicate). Irrelevant at the personal-tracker scale this app runs at today; worth a look only if exercise history ever gets slow.
 
 ## Phase status
 | Phase | Scope | State | Verified |
