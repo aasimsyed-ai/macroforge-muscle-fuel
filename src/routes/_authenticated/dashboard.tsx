@@ -14,6 +14,7 @@ import { WorkoutDashboard } from "@/components/workout/WorkoutDashboard";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAllMetrics, useGoals, useMeals, useMetrics, useProfile } from "@/lib/data";
+import { useCurrentBodyWeightKg } from "@/lib/useCurrentBodyWeightKg";
 import { useTrackingMode } from "@/lib/workouts/useTrackingMode";
 import {
   RANGE_OPTIONS,
@@ -96,10 +97,9 @@ function Dashboard() {
   const latestWaist = waistLogs.length ? Number(waistLogs[waistLogs.length - 1]!.waist_cm) : null;
 
   // Latest logged body weight (daily metrics) with the profile weight as fallback,
-  // used only to estimate workout calories.
-  const profileWeight =
-    profile.data?.start_weight_kg != null ? Number(profile.data.start_weight_kg) : null;
-  const currentBodyWeightKg = latestWeight ?? profileWeight;
+  // used only to estimate workout calories. Shared with the standalone Log
+  // Workout page so both compute it the same way.
+  const currentBodyWeightKg = useCurrentBodyWeightKg();
 
   const workoutDays = metrics.filter((m) => Number(m.workout_minutes ?? 0) > 0).length;
   const creatineDays = metrics.filter((m) => m.creatine_taken).length;
