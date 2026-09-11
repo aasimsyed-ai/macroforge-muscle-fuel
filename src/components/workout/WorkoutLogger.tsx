@@ -72,6 +72,10 @@ export function WorkoutLogger({
   const [errors, setErrors] = useState<string[]>([]);
   const [showWearable, setShowWearable] = useState(false);
   const [copyingSessionId, setCopyingSessionId] = useState<string | null>(null);
+  // Bumped whenever `draft.exercises` is replaced wholesale (copy-from-previous,
+  // post-save reset) so exercise/set rows remount and drop stale local UI state
+  // (e.g. a weight input's "custom vs preset" toggle) instead of reusing it by index.
+  const [draftVersion, setDraftVersion] = useState(0);
   const phaseTouched = useRef(false);
   const submittingRef = useRef(false);
 
@@ -125,6 +129,7 @@ export function WorkoutLogger({
       }
       const exercises = workoutApi.sessionDetailToExerciseDrafts(detail);
       setDraft((current) => ({ ...current, exercises }));
+      setDraftVersion((v) => v + 1);
       toast.success("Loaded — update the weights and save.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not load that workout.");
@@ -159,6 +164,7 @@ export function WorkoutLogger({
       await create.mutateAsync({ draft, bodyWeightKg });
       toast.success("Workout saved");
       setDraft(initialDraft());
+      setDraftVersion((v) => v + 1);
       phaseTouched.current = false;
       onSaved?.();
     } catch (error) {
@@ -285,7 +291,7 @@ export function WorkoutLogger({
         </div>
         {draft.exercises.map((exercise, index) => (
           <WorkoutExerciseForm
-            key={index}
+            key={`${draftVersion}-${index}`}
             index={index}
             exercise={exercise}
             catalog={catalog.data ?? []}

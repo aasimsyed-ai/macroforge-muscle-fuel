@@ -125,6 +125,14 @@ function parseTime(value: string | null): number | null {
   return Number(match[1]) * 60 + Number(match[2]);
 }
 
+/** Calendar-day key in the viewer's local timezone (not UTC — avoids the "today" budget resetting at the wrong hour). */
+function localDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function isWithinQuietHours(now: Date, start: string | null, end: string | null): boolean {
   const startMin = parseTime(start);
   const endMin = parseTime(end);
@@ -144,7 +152,7 @@ export function filterNotificationDrafts(
   drafts: NotificationDraft[],
   ctx: NotificationContext,
 ): NotificationDraft[] {
-  const todayKey = ctx.now.toISOString().slice(0, 10);
+  const todayKey = localDateKey(ctx.now);
   const weekAgo = ctx.now.getTime() - 7 * 86400000;
 
   const nonSystemThisWeek = ctx.existing.filter(
@@ -152,7 +160,7 @@ export function filterNotificationDrafts(
   ).length;
   const categoriesToday = new Set(
     ctx.existing
-      .filter((row) => row.created_at.slice(0, 10) === todayKey)
+      .filter((row) => localDateKey(new Date(row.created_at)) === todayKey)
       .map((row) => row.category),
   );
   const quiet = isWithinQuietHours(ctx.now, ctx.prefs.quietHoursStart, ctx.prefs.quietHoursEnd);

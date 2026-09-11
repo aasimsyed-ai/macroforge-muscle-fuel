@@ -78,7 +78,9 @@ describe("filterNotificationDrafts — spam rules", () => {
       drafts,
       context({
         progression: [progressionItem({})],
-        existing: [{ category: "progression", created_at: "2026-09-08T08:00:00.000Z" }],
+        // Local (no "Z") and same day as `now` above, so the "already notified
+        // today" check is unambiguous regardless of the test runner's timezone.
+        existing: [{ category: "progression", created_at: "2026-09-08T09:00:00" }],
       }),
     );
     expect(filtered).toHaveLength(0);
