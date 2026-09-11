@@ -16,6 +16,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useCelebrationPreference } from "@/lib/celebrationPreference";
 import { useGoals, useProfile, useUpdateGoals, useUpdateProfile } from "@/lib/data";
+import { guestActive } from "@/lib/guest";
 import { GOAL_TYPES } from "@/lib/nutrition";
 import {
   fetchPushPreferences,
@@ -68,24 +69,32 @@ function SettingsPage() {
   const updateGoals = useUpdateGoals();
   const [celebrationFx, setCelebrationFx] = useCelebrationPreference();
 
-  const pushSupported = isPushSupported();
+  // Push is only ever offered to a signed-in user on a supporting browser —
+  // guests have no account for a subscription to attach to.
+  const pushVisible = isPushSupported() && !guestActive();
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const [quietStart, setQuietStart] = useState("");
   const [quietEnd, setQuietEnd] = useState("");
   const [testSending, setTestSending] = useState(false);
+  // null = still checking, true = the Phase G migration is applied and push
+  // is usable, false = the underlying table/columns don't exist yet. Checked
+  // once so the panel can show a calm "not set up yet" state instead of a
+  // raw database error the first time someone touches the toggle.
+  const [pushMigrationReady, setPushMigrationReady] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (!pushSupported) return;
+    if (!pushVisible) return;
     fetchPushPreferences()
       .then((prefs) => {
+        setPushMigrationReady(true);
         setPushEnabled(prefs.enabled);
         setQuietStart(prefs.quietHoursStart?.slice(0, 5) ?? "");
         setQuietEnd(prefs.quietHoursEnd?.slice(0, 5) ?? "");
       })
-      .catch(() => undefined);
+      .catch(() => setPushMigrationReady(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pushSupported]);
+  }, [pushVisible]);
 
   async function togglePush(next: boolean) {
     setPushBusy(true);
@@ -288,7 +297,14 @@ function SettingsPage() {
         />
       </div>
 
-      {pushSupported ? (
+      {pushVisible && pushMigrationReady === false ? (
+        <div className="panel mt-4 p-4">
+          <p className="text-sm font-semibold">Push notifications</p>
+          <p className="text-xs text-muted-foreground">Coming soon — not set up yet.</p>
+        </div>
+      ) : null}
+
+      {pushVisible && pushMigrationReady === true ? (
         <div className="panel mt-4 space-y-3 p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
