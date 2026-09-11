@@ -106,13 +106,44 @@ export function BodyTrendChart({ metrics }: { metrics: DailyMetric[] }) {
   );
 }
 
-export function HabitChart({ metrics }: { metrics: DailyMetric[] }) {
-  const data = metrics.map((m) => ({
+export function HabitChart({
+  metrics,
+  workoutMinutesByDate,
+}: {
+  metrics: DailyMetric[];
+  /**
+   * Per-day workout minutes from workout_sessions (the structured logger,
+   * now the source of truth). Days present here override the legacy
+   * daily_metrics.workout_minutes field for that date; days absent fall back
+   * to the old manually-typed value so historical entries logged before the
+   * structured logger existed still show up.
+   */
+  workoutMinutesByDate?: Map<string, number>;
+}) {
+  const metricDates = new Set(metrics.map((m) => m.metric_date));
+  const extraWorkoutDates = workoutMinutesByDate
+    ? [...workoutMinutesByDate.keys()].filter((d) => !metricDates.has(d))
+    : [];
+
+  const fromMetrics = metrics.map((m) => ({
+    date: m.metric_date,
     label: format(parseISO(m.metric_date), "d MMM"),
-    workout: Number(m.workout_minutes ?? 0),
+    workout: workoutMinutesByDate?.get(m.metric_date) ?? Number(m.workout_minutes ?? 0),
     sleep: Number(m.sleep_hours ?? 0),
     water: Number(m.water_ml ?? 0) / 1000,
   }));
+  // Days that only have a structured workout session (no daily_metrics row
+  // at all) still need a bar — otherwise a user who exclusively uses the
+  // Log Workout flow would see an empty chart.
+  const fromWorkoutsOnly = extraWorkoutDates.map((date) => ({
+    date,
+    label: format(parseISO(date), "d MMM"),
+    workout: workoutMinutesByDate?.get(date) ?? 0,
+    sleep: 0,
+    water: 0,
+  }));
+
+  const data = [...fromMetrics, ...fromWorkoutsOnly].sort((a, b) => a.date.localeCompare(b.date));
 
   return (
     <Panel title="Workouts, sleep & water" subtitle="Minutes trained, hours slept, litres of water">

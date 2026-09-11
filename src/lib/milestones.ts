@@ -1,6 +1,13 @@
 import { supabase } from "@/integrations/supabase/client";
 import { guestActive, guestAllMeals } from "@/lib/guest";
-import { createNotificationIfAbsent, type NotificationDraft } from "@/lib/workouts/api";
+import { aggregateDailyProtein, countProteinHitDays } from "@/lib/streaks";
+import {
+  createNotificationIfAbsent,
+  fetchNotificationPreferences,
+  fetchNotifications,
+  type NotificationDraft,
+} from "@/lib/workouts/api";
+import { filterNotificationDrafts, type NotificationContext } from "@/lib/workouts/notifications";
 
 async function requireUserId(): Promise<string> {
   const { data, error } = await supabase.auth.getUser();
@@ -8,11 +15,35 @@ async function requireUserId(): Promise<string> {
   return data.user.id;
 }
 
+/**
+ * Days the protein target was hit, over a wider window than the 90-day
+ * streak lookback (bounded, but generous enough that a slow-and-steady user
+ * — say one hit every ~2 weeks — can still reach "hit 20 times" without
+ * older hits ageing out of a short window). Its own query, decoupled from
+ * the streak window, since the two have different needs.
+ */
+export async function fetchProteinHitDays(proteinTarget: number, days = 400): Promise<number> {
+  if (proteinTarget <= 0) return 0;
+  if (guestActive()) {
+    return countProteinHitDays(aggregateDailyProtein(guestAllMeals()), proteinTarget);
+  }
+  const userId = await requireUserId();
+  const from = new Date();
+  from.setDate(from.getDate() - days);
+  const { data, error } = await supabase
+    .from("meals")
+    .select("eaten_at, protein_g")
+    .eq("user_id", userId)
+    .gte("eaten_at", from.toISOString());
+  if (error) throw error;
+  return countProteinHitDays(aggregateDailyProtein(data ?? []), proteinTarget);
+}
+
 export interface MilestoneContext {
   totalMeals: number;
   totalWorkouts: number;
   loggingStreak: number;
-  /** Days the protein target was hit within the bounded streak lookback window. */
+  /** Days the protein target was hit — see fetchProteinHitDays for the (wider than streaks) lookback window. */
   proteinHitDays: number;
 }
 
@@ -124,9 +155,13 @@ function markRun() {
 
 /**
  * Checks milestones and persists any newly-reached ones (DB-deduped by
- * dedupe_key, same mechanism the workout notifications already use). Returns
- * only the ones genuinely new on THIS device, for the caller to celebrate —
- * throttled to roughly once every 4 hours so this never becomes a hot path.
+ * dedupe_key, same mechanism the workout notifications already use), routed
+ * through the SAME filterNotificationDrafts used for workout notifications —
+ * so milestones share the weekly non-system cap, the one-per-category-per-day
+ * limit, quiet hours, and the per-category enable toggles, rather than
+ * bypassing them. Returns only the ones genuinely new on THIS device, for
+ * the caller to celebrate — throttled to roughly once every 4 hours so this
+ * never becomes a hot path.
  */
 export async function runMilestoneCheck(
   ctx: MilestoneContext,
@@ -136,10 +171,30 @@ export async function runMilestoneCheck(
   if (!shouldRunNow(!!options.force)) return [];
   markRun();
 
-  const drafts = buildMilestoneDrafts(ctx);
+  const candidates = buildMilestoneDrafts(ctx).filter((d) => !alreadyShownLocally(d.dedupeKey));
+  if (candidates.length === 0) return [];
+
+  let allowed: NotificationDraft[];
+  try {
+    const [prefs, existing] = await Promise.all([fetchNotificationPreferences(), fetchNotifications()]);
+    const filterCtx: NotificationContext = {
+      now: new Date(),
+      prefs,
+      workoutsThisWeek: 0,
+      returnedAfterBreak: false,
+      progression: [],
+      existing: existing.map((row) => ({ category: row.category, created_at: row.created_at })),
+    };
+    allowed = filterNotificationDrafts(candidates, filterCtx);
+  } catch {
+    // Can't confirm the shared budget/quiet-hours state right now — skip
+    // this run rather than risk over-notifying. It'll be re-evaluated next
+    // time the throttle allows.
+    return [];
+  }
+
   const fresh: NotificationDraft[] = [];
-  for (const draft of drafts) {
-    if (alreadyShownLocally(draft.dedupeKey)) continue;
+  for (const draft of allowed) {
     try {
       await createNotificationIfAbsent(draft);
       markShownLocally(draft.dedupeKey);

@@ -23,14 +23,10 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { playMilestoneTone, triggerHaptic } from "@/lib/celebrationEffects";
 import { useAllMetrics, useGoals, useMeals, useMetrics, useProfile } from "@/lib/data";
-import { fetchMilestoneCounts, runMilestoneCheck } from "@/lib/milestones";
-import {
-  aggregateDailyProtein,
-  computeLoggingStreak,
-  computeProteinStreak,
-  countProteinHitDays,
-} from "@/lib/streaks";
+import { fetchMilestoneCounts, fetchProteinHitDays, runMilestoneCheck } from "@/lib/milestones";
+import { aggregateDailyProtein, computeLoggingStreak, computeProteinStreak } from "@/lib/streaks";
 import { useCurrentBodyWeightKg } from "@/lib/useCurrentBodyWeightKg";
+import { useWorkoutStats } from "@/lib/workouts/hooks";
 import { useTrackingMode } from "@/lib/workouts/useTrackingMode";
 import {
   RANGE_OPTIONS,
@@ -82,6 +78,14 @@ function Dashboard() {
   const rangeMeals = useMeals(range.from, range.to);
   const rangeMetrics = useMetrics(range.from, range.to);
   const allMetrics = useAllMetrics();
+  // workout_sessions (the structured logger) is the source of truth for
+  // workout-day counts and the habit chart's workout bar — shares its cache
+  // with WorkoutDashboard's own call for the same range (same query key), so
+  // this doesn't add a second network request when viewing Workout mode.
+  const rangeWorkoutStats = useWorkoutStats(
+    format(range.from, "yyyy-MM-dd"),
+    format(range.to, "yyyy-MM-dd"),
+  );
   // A fixed 90-day lookback for streaks — independent of whatever range is
   // currently selected above, and bounded so it doesn't grow unbounded over
   // time. Computed once per mount so the query key stays stable (otherwise a
@@ -108,12 +112,18 @@ function Dashboard() {
     let cancelled = false;
     (async () => {
       try {
-        const counts = await fetchMilestoneCounts();
+        const [counts, proteinHitDays] = await Promise.all([
+          fetchMilestoneCounts(),
+          // A wider, dedicated lookback than the 90-day streak window — a
+          // milestone counting toward 20 lifetime hits shouldn't lose credit
+          // for hits that happen to fall outside the streak's short window.
+          fetchProteinHitDays(goals.protein_target_g),
+        ]);
         const fresh = await runMilestoneCheck({
           totalMeals: counts.totalMeals,
           totalWorkouts: counts.totalWorkouts,
           loggingStreak: computeLoggingStreak(dailyProteinTotals, new Date()),
-          proteinHitDays: countProteinHitDays(dailyProteinTotals, goals.protein_target_g),
+          proteinHitDays,
         });
         if (cancelled || fresh.length === 0) return;
         for (const draft of fresh) {
@@ -163,7 +173,21 @@ function Dashboard() {
   // Workout page so both compute it the same way.
   const currentBodyWeightKg = useCurrentBodyWeightKg();
 
-  const workoutDays = metrics.filter((m) => Number(m.workout_minutes ?? 0) > 0).length;
+  // Union of both sources: a day counts if it has a structured workout_session
+  // (the current source of truth) OR an old manually-typed quick-log entry
+  // (so historical data logged before the structured logger existed still
+  // counts — nothing that used to count stops counting).
+  const workoutMinutesByDate = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const session of rangeWorkoutStats.data?.sessions ?? []) {
+      map.set(session.workout_date, (map.get(session.workout_date) ?? 0) + (session.duration_minutes ?? 0));
+    }
+    return map;
+  }, [rangeWorkoutStats.data]);
+  const workoutDays = new Set([
+    ...metrics.filter((m) => Number(m.workout_minutes ?? 0) > 0).map((m) => m.metric_date),
+    ...workoutMinutesByDate.keys(),
+  ]).size;
   const creatineDays = metrics.filter((m) => m.creatine_taken).length;
   const sleepLogs = metrics.filter((m) => m.sleep_hours != null);
   const avgSleep = sleepLogs.length
@@ -380,7 +404,7 @@ function Dashboard() {
             goalWeight={goals.target_weight_kg}
           />
         ) : null}
-        <HabitChart metrics={metrics} />
+        <HabitChart metrics={metrics} workoutMinutesByDate={workoutMinutesByDate} />
         <StrengthMiniTrend />
         <MetricsQuickLog date={quickLogDate} metric={quickLogMetric} goals={goals} />
       </div>
