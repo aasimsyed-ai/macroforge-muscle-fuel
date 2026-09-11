@@ -24,6 +24,15 @@ Full bug hunt / gap analysis across the workout feature per user request. No loc
 
 **Minor, low-priority, not fixed:** `fetchExerciseHistory`'s `.ilike(exercise_name, name)` won't necessarily use the `lower(exercise_name)` functional index at large per-user row counts (ILIKE vs. an `=`-on-`lower()` predicate). Irrelevant at the personal-tracker scale this app runs at today; worth a look only if exercise history ever gets slow.
 
+## Edit a saved workout — added 2026-09-12
+User reported no way to edit a submitted workout (only view/delete existed). Added:
+- `sessionDetailToDraft()` in `api.ts` — turns a saved `WorkoutSessionDetail` back into a full `WorkoutSessionDraft` (date, phase, intensity, duration, notes, wearable fields inferred from `calories_source`, plus every exercise/set via the existing `sessionDetailToExerciseDrafts`).
+- `replaceWorkoutSession()` in `api.ts` + `useReplaceWorkout` hook — the create RPC only appends, so an edit is create-the-replacement-then-delete-the-original, in that order, so a failed delete never loses data (worst case: a harmless duplicate).
+- `WorkoutLogger` now accepts an optional `initialData={{ sessionId, draft }}` prop; when set it pre-fills the form, calls `replaceWorkoutSession` instead of `createWorkoutSession` on submit, shows "Save changes" instead of "Save workout", and skips the "copy from previous" picker.
+- `WorkoutHistory` gained a pencil/edit icon button per row (next to delete) that expands an inline `WorkoutLogger` pre-filled with that session's data.
+- **Bug fixed along the way**: `sessionDetailToExerciseDrafts` hardcoded every restored set's `completed` to `true`, silently un-skipping any set the user had marked incomplete. Now preserves the real value — matters for both this edit feature and the existing "copy a previous workout" feature.
+- Deployed and verified live (bundle `dashboard-H6AGQALW.js`).
+
 ## Phase status
 | Phase | Scope | State | Verified |
 |---|---|---|---|
