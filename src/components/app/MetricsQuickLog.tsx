@@ -8,11 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useSaveMetric, type DailyMetric, type Goals } from "@/lib/data";
 
-type Props = { today: DailyMetric | undefined; goals: Goals };
+type Props = { date: string; metric: DailyMetric | undefined; goals: Goals };
 
-export function MetricsQuickLog({ today, goals }: Props) {
+export function MetricsQuickLog({ date, metric, goals }: Props) {
   const save = useSaveMetric();
-  const date = format(new Date(), "yyyy-MM-dd");
+  const isToday = date === format(new Date(), "yyyy-MM-dd");
   const [form, setForm] = useState({
     weight_kg: "",
     waist_cm: "",
@@ -25,15 +25,15 @@ export function MetricsQuickLog({ today, goals }: Props) {
 
   useEffect(() => {
     setForm({
-      weight_kg: today?.weight_kg?.toString() ?? "",
-      waist_cm: today?.waist_cm?.toString() ?? "",
-      water_ml: today?.water_ml?.toString() ?? "",
-      sleep_hours: today?.sleep_hours?.toString() ?? "",
-      workout_minutes: today?.workout_minutes?.toString() ?? "",
-      workout_type: today?.workout_type ?? "",
-      creatine_taken: today?.creatine_taken ?? false,
+      weight_kg: metric?.weight_kg?.toString() ?? "",
+      waist_cm: metric?.waist_cm?.toString() ?? "",
+      water_ml: metric?.water_ml?.toString() ?? "",
+      sleep_hours: metric?.sleep_hours?.toString() ?? "",
+      workout_minutes: metric?.workout_minutes?.toString() ?? "",
+      workout_type: metric?.workout_type ?? "",
+      creatine_taken: metric?.creatine_taken ?? false,
     });
-  }, [today]);
+  }, [metric]);
 
   const num = (v: string) => (v.trim() === "" ? null : Number(v));
 
@@ -51,7 +51,7 @@ export function MetricsQuickLog({ today, goals }: Props) {
         creatine_taken: form.creatine_taken,
         creatine_g: form.creatine_taken ? goals.creatine_target_g : 0,
       });
-      toast.success("Today's metrics saved");
+      toast.success(isToday ? "Today's metrics saved" : "Metrics saved");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save metrics");
     }
@@ -68,8 +68,10 @@ export function MetricsQuickLog({ today, goals }: Props) {
   return (
     <form onSubmit={submit} className="panel space-y-4 p-4">
       <div>
-        <p className="text-sm font-semibold">Today&apos;s body & habits</p>
-        <p className="text-xs text-muted-foreground">{format(new Date(), "EEEE d MMM yyyy")}</p>
+        <p className="text-sm font-semibold">{isToday ? "Today's body & habits" : "Body & habits"}</p>
+        <p className="text-xs text-muted-foreground">
+          {format(new Date(`${date}T00:00:00`), "EEEE d MMM yyyy")}
+        </p>
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {fields.map((f) => (
@@ -112,7 +114,7 @@ export function MetricsQuickLog({ today, goals }: Props) {
         />
       </div>
       <Button type="submit" disabled={save.isPending} className="w-full sm:w-auto">
-        {save.isPending ? "Saving…" : "Save today's metrics"}
+        {save.isPending ? "Saving…" : isToday ? "Save today's metrics" : "Save metrics"}
       </Button>
     </form>
   );

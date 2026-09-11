@@ -84,8 +84,12 @@ function Dashboard() {
       };
 
   const metrics = rangeMetrics.data ?? [];
-  const todayKey = format(new Date(), "yyyy-MM-dd");
-  const todayMetric = (allMetrics.data ?? []).find((m) => m.metric_date === todayKey);
+  // The quick-log widget edits a single day: the selected day itself when the
+  // range is one day (Today/Yesterday/a custom single date), otherwise the most
+  // recent day in the range — never hardcoded to today, so it always matches
+  // whatever the range picker above it says.
+  const quickLogDate = format(isSingleDay ? range.from : range.to, "yyyy-MM-dd");
+  const quickLogMetric = (allMetrics.data ?? []).find((m) => m.metric_date === quickLogDate);
   const weighIns = (allMetrics.data ?? []).filter((m) => m.weight_kg != null);
   const latestWeight = weighIns.length ? Number(weighIns[weighIns.length - 1]!.weight_kg) : null;
   const waistLogs = (allMetrics.data ?? []).filter((m) => m.waist_cm != null);
@@ -279,7 +283,7 @@ function Dashboard() {
         />
         <BodyTrendChart metrics={allMetrics.data ?? []} />
         <HabitChart metrics={metrics} />
-        <MetricsQuickLog today={todayMetric} goals={goals} />
+        <MetricsQuickLog date={quickLogDate} metric={quickLogMetric} goals={goals} />
       </div>
 
       <section className="mt-6" aria-label="Meal history">
