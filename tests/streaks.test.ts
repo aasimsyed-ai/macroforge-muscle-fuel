@@ -4,6 +4,7 @@ import {
   aggregateDailyProtein,
   computeLoggingStreak,
   computeProteinStreak,
+  countProteinHitDays,
 } from "../src/lib/streaks";
 
 const NOW = new Date("2026-09-12T18:00:00");
@@ -64,5 +65,22 @@ describe("computeProteinStreak", () => {
   it("returns 0 for a non-positive target", () => {
     const totals = aggregateDailyProtein([meal("2026-09-12", 200)]);
     expect(computeProteinStreak(totals, 0, NOW)).toBe(0);
+  });
+});
+
+describe("countProteinHitDays", () => {
+  it("counts every qualifying day in the window, not just a streak", () => {
+    const totals = aggregateDailyProtein([
+      meal("2026-08-01", 140),
+      meal("2026-08-15", 90), // under target
+      meal("2026-09-01", 200),
+      meal("2026-09-12", 130),
+    ]);
+    expect(countProteinHitDays(totals, 130)).toBe(3);
+  });
+
+  it("returns 0 for a non-positive target", () => {
+    const totals = aggregateDailyProtein([meal("2026-09-12", 200)]);
+    expect(countProteinHitDays(totals, 0)).toBe(0);
   });
 });

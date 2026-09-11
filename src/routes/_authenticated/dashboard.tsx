@@ -1,11 +1,13 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { format, subDays } from "date-fns";
 import { Download, Droplets, Dumbbell, Moon, Pill, Scale, Ruler } from "lucide-react";
+import { toast } from "sonner";
 import { z } from "zod";
 
 import { AppShell } from "@/components/app/AppShell";
 import { DailyCompletionCard } from "@/components/app/DailyCompletionCard";
+import { DayCelebration } from "@/components/app/DayCelebration";
 import { MealList } from "@/components/app/MealList";
 import { MetricsQuickLog } from "@/components/app/MetricsQuickLog";
 import { ProgressRing } from "@/components/app/ProgressRing";
@@ -19,8 +21,15 @@ import { TrackingModeToggle } from "@/components/workout/TrackingModeToggle";
 import { WorkoutDashboard } from "@/components/workout/WorkoutDashboard";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { playMilestoneTone, triggerHaptic } from "@/lib/celebrationEffects";
 import { useAllMetrics, useGoals, useMeals, useMetrics, useProfile } from "@/lib/data";
-import { aggregateDailyProtein, computeLoggingStreak, computeProteinStreak } from "@/lib/streaks";
+import { fetchMilestoneCounts, runMilestoneCheck } from "@/lib/milestones";
+import {
+  aggregateDailyProtein,
+  computeLoggingStreak,
+  computeProteinStreak,
+  countProteinHitDays,
+} from "@/lib/streaks";
 import { useCurrentBodyWeightKg } from "@/lib/useCurrentBodyWeightKg";
 import { useTrackingMode } from "@/lib/workouts/useTrackingMode";
 import {
@@ -87,8 +96,41 @@ function Dashboard() {
     [streakMeals.data],
   );
 
+  const [milestoneBurstKey, setMilestoneBurstKey] = useState(0);
+
   const goals = goalsQuery.data;
   const loading = goalsQuery.isLoading || rangeMeals.isLoading;
+
+  // Check milestones once the goal target and streak window are both ready.
+  // Best-effort: never blocks or errors the dashboard if it fails.
+  useEffect(() => {
+    if (!goals) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const counts = await fetchMilestoneCounts();
+        const fresh = await runMilestoneCheck({
+          totalMeals: counts.totalMeals,
+          totalWorkouts: counts.totalWorkouts,
+          loggingStreak: computeLoggingStreak(dailyProteinTotals, new Date()),
+          proteinHitDays: countProteinHitDays(dailyProteinTotals, goals.protein_target_g),
+        });
+        if (cancelled || fresh.length === 0) return;
+        for (const draft of fresh) {
+          toast.success(draft.title, { description: draft.message });
+        }
+        setMilestoneBurstKey((k) => k + 1);
+        playMilestoneTone();
+        triggerHaptic([15, 40, 15]);
+      } catch {
+        // milestones are a nice-to-have — never surface this as an error
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [goals, dailyProteinTotals]);
 
   const rangeTotals = sumMeals(rangeMeals.data);
   const days = Math.max(1, range.days);
@@ -179,6 +221,12 @@ function Dashboard() {
       title="Dashboard"
       subtitle={`${range.label} · ${latestWeight ? `${latestWeight} kg` : "no weigh-in yet"} → ${goals.target_weight_kg} kg goal`}
     >
+      {milestoneBurstKey > 0 ? (
+        <div className="pointer-events-none fixed left-1/2 top-24 z-50 -translate-x-1/2" aria-hidden="true">
+          <DayCelebration key={milestoneBurstKey} />
+        </div>
+      ) : null}
+
       <div className="mb-3">
         <TrackingModeToggle mode={trackingMode} onChange={setTrackingMode} />
       </div>

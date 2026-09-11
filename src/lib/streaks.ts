@@ -61,3 +61,13 @@ export function computeProteinStreak(
   if (proteinTarget <= 0) return 0;
   return currentStreak((key) => (dailyTotals.get(key)?.protein ?? 0) >= proteinTarget, now);
 }
+
+/** Total days (within whatever window `dailyTotals` covers) the protein target was met — not just the current streak. */
+export function countProteinHitDays(dailyTotals: Map<string, DayAgg>, proteinTarget: number): number {
+  if (proteinTarget <= 0) return 0;
+  let count = 0;
+  for (const day of dailyTotals.values()) {
+    if (day.protein >= proteinTarget) count += 1;
+  }
+  return count;
+}
