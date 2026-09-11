@@ -180,7 +180,8 @@ export function WorkoutLogger({
         toast.success("Workout updated");
       } else {
         await create.mutateAsync({ draft, bodyWeightKg });
-        toast.success("Workout saved");
+        const moved = Math.round(totalVolume);
+        toast.success(moved > 0 ? `Workout logged ✓ · ${moved.toLocaleString()} kg moved` : "Workout logged ✓");
         setDraft(initialDraft());
         setDraftVersion((v) => v + 1);
         phaseTouched.current = false;
