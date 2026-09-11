@@ -12,6 +12,13 @@
  * mirrors the existing WHATSAPP_DELIVERY_ENABLED pattern in this codebase.
  * Do not flip this on without the user's explicit approval.
  *
+ * Beyond that master switch, every call also respects the calling user's own
+ * `profiles.push_notifications_enabled` toggle and quiet hours before
+ * sending anything (reasons: "push_disabled" / "quiet_hours" /
+ * "preferences_unavailable"). Quiet hours are compared in UTC — there is no
+ * per-user timezone stored anywhere in this app yet, same documented
+ * limitation as the existing client-side quiet-hours check.
+ *
  * Deploy (same path as analyze-food — this project's edge functions are
  * deployed via the Lovable agent, not a local CLI):
  *   1. supabase secrets set VAPID_PUBLIC_KEY=...  VAPID_PRIVATE_KEY=...
@@ -36,6 +43,29 @@ function json(obj: unknown, status = 200): Response {
     status,
     headers: { ...CORS, "content-type": "application/json" },
   });
+}
+
+function parseTime(value: string | null): number | null {
+  if (!value) return null;
+  const match = /^(\d{1,2}):(\d{2})/.exec(value);
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+/**
+ * Best-effort only: the server has no per-user timezone stored anywhere in
+ * this app (same limitation as the existing client-side quiet-hours check
+ * for workout notifications, which relies on the browser's local clock
+ * instead). Comparing against UTC is the only option available server-side
+ * without adding a timezone column — documented, not a bug to silently fix
+ * here.
+ */
+function isWithinQuietHoursUtc(now: Date, start: string | null, end: string | null): boolean {
+  const startMin = parseTime(start);
+  const endMin = parseTime(end);
+  if (startMin === null || endMin === null || startMin === endMin) return false;
+  const nowMin = now.getUTCHours() * 60 + now.getUTCMinutes();
+  return startMin < endMin ? nowMin >= startMin && nowMin < endMin : nowMin >= startMin || nowMin < endMin;
 }
 
 Deno.serve(async (req: Request) => {
@@ -63,6 +93,26 @@ Deno.serve(async (req: Request) => {
 
   if (!deliveryEnabled) {
     return json({ sent: false, delivered: 0, failed: 0, reason: "delivery_disabled" });
+  }
+
+  // Respect the user's own toggle and quiet hours before sending anything.
+  // Nothing in this app calls this function automatically today, but the
+  // check belongs here — in the sender — so it's already correct the moment
+  // any future scheduler starts calling it, without needing to touch this
+  // function again.
+  const { data: prefs, error: prefsError } = await supabase
+    .from("profiles")
+    .select("push_notifications_enabled, push_quiet_hours_start, push_quiet_hours_end")
+    .eq("id", userData.user.id)
+    .single();
+  if (prefsError) {
+    return json({ sent: false, delivered: 0, failed: 0, reason: "preferences_unavailable" });
+  }
+  if (!prefs.push_notifications_enabled) {
+    return json({ sent: false, delivered: 0, failed: 0, reason: "push_disabled" });
+  }
+  if (isWithinQuietHoursUtc(new Date(), prefs.push_quiet_hours_start, prefs.push_quiet_hours_end)) {
+    return json({ sent: false, delivered: 0, failed: 0, reason: "quiet_hours" });
   }
 
   const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY");
