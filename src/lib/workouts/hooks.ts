@@ -53,6 +53,13 @@ export function useReplaceWorkout() {
   });
 }
 
+export function useRecentSessionVolumes(limit = 8) {
+  return useQuery({
+    queryKey: [...WORKOUT_KEY, "recent-volumes", limit],
+    queryFn: () => api.fetchRecentSessionVolumes(limit),
+  });
+}
+
 export function useRecentWorkoutSessions() {
   return useQuery({
     queryKey: [...WORKOUT_KEY, "recent-sessions"],

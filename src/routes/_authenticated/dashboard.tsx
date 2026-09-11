@@ -1,19 +1,26 @@
+import { useMemo } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { format } from "date-fns";
+import { format, subDays } from "date-fns";
 import { Download, Droplets, Dumbbell, Moon, Pill, Scale, Ruler } from "lucide-react";
 import { z } from "zod";
 
 import { AppShell } from "@/components/app/AppShell";
+import { DailyCompletionCard } from "@/components/app/DailyCompletionCard";
 import { MealList } from "@/components/app/MealList";
 import { MetricsQuickLog } from "@/components/app/MetricsQuickLog";
 import { ProgressRing } from "@/components/app/ProgressRing";
 import { StatCard } from "@/components/app/StatCard";
+import { StreakBadges } from "@/components/app/StreakBadges";
 import { BodyTrendChart, DailyIntakeChart, HabitChart } from "@/components/app/TrendCharts";
+import { StrengthMiniTrend } from "@/components/app/StrengthMiniTrend";
+import { WeeklyRecapCard } from "@/components/app/WeeklyRecapCard";
+import { WeightJourneyCard } from "@/components/app/WeightJourneyCard";
 import { TrackingModeToggle } from "@/components/workout/TrackingModeToggle";
 import { WorkoutDashboard } from "@/components/workout/WorkoutDashboard";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAllMetrics, useGoals, useMeals, useMetrics, useProfile } from "@/lib/data";
+import { aggregateDailyProtein, computeLoggingStreak, computeProteinStreak } from "@/lib/streaks";
 import { useCurrentBodyWeightKg } from "@/lib/useCurrentBodyWeightKg";
 import { useTrackingMode } from "@/lib/workouts/useTrackingMode";
 import {
@@ -66,6 +73,19 @@ function Dashboard() {
   const rangeMeals = useMeals(range.from, range.to);
   const rangeMetrics = useMetrics(range.from, range.to);
   const allMetrics = useAllMetrics();
+  // A fixed 90-day lookback for streaks — independent of whatever range is
+  // currently selected above, and bounded so it doesn't grow unbounded over
+  // time. Computed once per mount so the query key stays stable (otherwise a
+  // fresh `new Date()` on every render would refetch on every render).
+  const streakWindow = useMemo(() => {
+    const now = new Date();
+    return { from: subDays(now, 90), to: now };
+  }, []);
+  const streakMeals = useMeals(streakWindow.from, streakWindow.to);
+  const dailyProteinTotals = useMemo(
+    () => aggregateDailyProtein(streakMeals.data ?? []),
+    [streakMeals.data],
+  );
 
   const goals = goalsQuery.data;
   const loading = goalsQuery.isLoading || rangeMeals.isLoading;
@@ -148,6 +168,12 @@ function Dashboard() {
   const remainingKcal = Math.max(0, goals.calorie_target - progress.calories);
   const remainingProtein = Math.max(0, goals.protein_target_g - progress.protein);
 
+  const loggingStreak = computeLoggingStreak(dailyProteinTotals, new Date());
+  const proteinStreak = computeProteinStreak(dailyProteinTotals, goals.protein_target_g, new Date());
+
+  const startWeight =
+    profile.data?.start_weight_kg != null ? Number(profile.data.start_weight_kg) : null;
+
   return (
     <AppShell
       title="Dashboard"
@@ -207,7 +233,20 @@ function Dashboard() {
         />
       ) : (
         <>
-      <section className="panel mt-5 p-4" aria-label="Goal progress">
+      <div className="mt-4 space-y-3">
+        <StreakBadges loggingStreak={loggingStreak} proteinStreak={proteinStreak} />
+        {rangeKey === "today" ? (
+          <DailyCompletionCard
+            date={quickLogDate}
+            calories={progress.calories}
+            calorieTarget={goals.calorie_target}
+            protein={progress.protein}
+            proteinTarget={goals.protein_target_g}
+          />
+        ) : null}
+      </div>
+
+      <section className="panel mt-3 p-4" aria-label="Goal progress">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <p className="text-sm font-semibold">
             {isSingleDay ? `${range.label} · goal progress` : `${range.label} · daily average vs target`}
@@ -275,6 +314,10 @@ function Dashboard() {
         />
       </section>
 
+      <div className="mt-5">
+        <WeeklyRecapCard />
+      </div>
+
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
         <DailyIntakeChart
           meals={rangeMeals.data ?? []}
@@ -282,7 +325,15 @@ function Dashboard() {
           proteinTarget={goals.protein_target_g}
         />
         <BodyTrendChart metrics={allMetrics.data ?? []} />
+        {startWeight != null && latestWeight != null ? (
+          <WeightJourneyCard
+            startWeight={startWeight}
+            currentWeight={latestWeight}
+            goalWeight={goals.target_weight_kg}
+          />
+        ) : null}
         <HabitChart metrics={metrics} />
+        <StrengthMiniTrend />
         <MetricsQuickLog date={quickLogDate} metric={quickLogMetric} goals={goals} />
       </div>
 

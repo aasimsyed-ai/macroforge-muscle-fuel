@@ -52,6 +52,27 @@ export async function fetchExerciseCatalog(): Promise<ExerciseCatalogItem[]> {
 
 /* --------------------------------- sessions -------------------------------- */
 
+export interface SessionVolumePoint {
+  date: string;
+  volume: number;
+}
+
+/** The last few sessions' total volume, oldest first — a compact "is load trending up" signal. */
+export async function fetchRecentSessionVolumes(limit = 8): Promise<SessionVolumePoint[]> {
+  const user = await requireUser();
+  const { data, error } = await supabase
+    .from("workout_sessions")
+    .select("workout_date, total_volume")
+    .eq("user_id", user.id)
+    .order("workout_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? [])
+    .map((row) => ({ date: row.workout_date, volume: Number(row.total_volume) }))
+    .reverse();
+}
+
 export async function fetchWorkoutSessions(fromDate: string, toDate: string): Promise<SessionRow[]> {
   const user = await requireUser();
   const { data, error } = await supabase
