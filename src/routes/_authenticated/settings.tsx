@@ -13,6 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { useCelebrationPreference } from "@/lib/celebrationPreference";
 import { useGoals, useProfile, useUpdateGoals, useUpdateProfile } from "@/lib/data";
 import { GOAL_TYPES } from "@/lib/nutrition";
 
@@ -55,6 +57,7 @@ function SettingsPage() {
   const goals = useGoals();
   const updateProfile = useUpdateProfile();
   const updateGoals = useUpdateGoals();
+  const [celebrationFx, setCelebrationFx] = useCelebrationPreference();
 
   const [goalForm, setGoalForm] = useState<Record<string, string>>({});
   const [goalType, setGoalType] = useState("lean_bulk");
@@ -202,6 +205,21 @@ function SettingsPage() {
             {updateGoals.isPending ? "Saving…" : "Save targets"}
           </Button>
         </form>
+      </div>
+
+      <div className="panel mt-4 flex items-center justify-between gap-3 p-4">
+        <div>
+          <p className="text-sm font-semibold">Sound &amp; haptic feedback</p>
+          <p className="text-xs text-muted-foreground">
+            A short tone and a brief vibration on save, streaks and milestones. Off by default.
+          </p>
+        </div>
+        <Switch
+          id="celebration-fx"
+          aria-label="Sound and haptic feedback"
+          checked={celebrationFx}
+          onCheckedChange={setCelebrationFx}
+        />
       </div>
     </AppShell>
   );

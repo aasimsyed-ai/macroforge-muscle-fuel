@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { playSaveTone, triggerHaptic } from "@/lib/celebrationEffects";
 import * as workoutApi from "@/lib/workouts/api";
 import { calculateSessionVolume, calculateWorkoutCalories } from "@/lib/workouts/calculations";
 import { INTENSITIES } from "@/lib/workouts/constants";
@@ -186,6 +187,8 @@ export function WorkoutLogger({
         setDraftVersion((v) => v + 1);
         phaseTouched.current = false;
       }
+      playSaveTone();
+      triggerHaptic();
       onSaved?.();
     } catch (error) {
       toast.error(

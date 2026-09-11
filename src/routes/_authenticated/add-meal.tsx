@@ -31,6 +31,7 @@ import {
   SERVING_SUGGESTIONS,
   type MacroEstimate,
 } from "@/lib/food-estimate";
+import { playSaveTone, triggerHaptic } from "@/lib/celebrationEffects";
 import { MEAL_CATEGORIES } from "@/lib/nutrition";
 import { useSaveFeedback } from "@/lib/useSaveFeedback";
 
@@ -305,6 +306,8 @@ function AddMeal() {
         toast.success(protein > 0 ? `Meal logged ✓ · +${protein}g protein` : "Meal logged ✓");
       }
       celebrate();
+      playSaveTone();
+      triggerHaptic();
       // Let the checkmark actually be seen before the page changes.
       window.setTimeout(() => navigate({ to: "/dashboard" }), 550);
     } catch (err) {

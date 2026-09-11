@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { PartyPopper, X } from "lucide-react";
 
+import { playMilestoneTone, triggerHaptic } from "@/lib/celebrationEffects";
+
 import { DayCelebration } from "./DayCelebration";
 
 function readFlag(key: string): boolean {
@@ -53,6 +55,8 @@ export function DailyCompletionCard({
     if (!readFlag(seenKey)) {
       writeFlag(seenKey);
       setShowBurst(true);
+      playMilestoneTone();
+      triggerHaptic([15, 40, 15]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [complete, seenKey]);
