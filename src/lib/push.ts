@@ -34,7 +34,12 @@ async function requireUserId(): Promise<string> {
 }
 
 async function getRegistration(): Promise<ServiceWorkerRegistration> {
-  const existing = await navigator.serviceWorker.getRegistration("/sw.js");
+  // getRegistration() takes a scope, not a script URL — "/" is this worker's
+  // scope since it's served from the site root. register() itself is
+  // idempotent (the browser dedupes same script+scope), so this lookup is
+  // just an optimization to skip a redundant register() call, not required
+  // for correctness.
+  const existing = await navigator.serviceWorker.getRegistration("/");
   return existing ?? navigator.serviceWorker.register("/sw.js");
 }
 
@@ -92,7 +97,7 @@ export async function subscribeToPush(): Promise<void> {
 export async function unsubscribeFromPush(): Promise<void> {
   const userId = await requireUserId();
 
-  const registration = await navigator.serviceWorker.getRegistration("/sw.js");
+  const registration = await navigator.serviceWorker.getRegistration("/");
   const subscription = await registration?.pushManager.getSubscription();
 
   if (subscription) {
