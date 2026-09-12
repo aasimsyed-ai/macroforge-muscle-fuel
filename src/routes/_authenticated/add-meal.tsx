@@ -1,11 +1,24 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { format } from "date-fns";
-import { Bookmark, Camera, Check, ChevronDown, ChevronRight, Mic, MicOff, RotateCcw, Sparkles, X } from "lucide-react";
+import {
+  Bookmark,
+  Camera,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Mic,
+  MicOff,
+  RotateCcw,
+  ScanLine,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 
 import { AppShell } from "@/components/app/AppShell";
+import { BarcodeScannerDialog, isBarcodeScanningSupported } from "@/components/app/BarcodeScannerDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -313,6 +326,11 @@ function AddMeal() {
   // best-effort feature in this app.
   const speech = useSpeechRecognition((transcript) => editDescription({ name: transcript }));
 
+  // Barcode scanning: feature-detected once (BarcodeDetector isn't in Safari/
+  // iOS/Firefox) rather than on every render.
+  const [barcodeSupported] = useState(isBarcodeScanningSupported);
+  const [scannerOpen, setScannerOpen] = useState(false);
+
   const targetId = editId ?? null;
   const ready = syncedId === targetId;
 
@@ -539,6 +557,24 @@ function AddMeal() {
     setExpandedItem(null);
   }
 
+  // A scanned product is exact (from its own label), not an approximation —
+  // added straight to the item list rather than routed through the
+  // auto-estimate text pipeline. Appends to whatever's already there, so
+  // scanning a second item after typing/scanning a first just adds to the
+  // same meal instead of replacing it.
+  function addScannedItem(item: EstimatedItem) {
+    setItems((current) => {
+      const next = [...current, item];
+      syncTotalsFromItems(next);
+      return next;
+    });
+    setForm((s) => ({
+      ...s,
+      name: s.name.trim() ? `${s.name.trim()} + ${item.label}` : item.label,
+    }));
+    toast.success(`Added "${item.label}"`);
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.name.trim()) {
@@ -627,6 +663,10 @@ function AddMeal() {
       title={isEdit ? "Edit Meal" : "Add Meal"}
       subtitle={isEdit ? "Update anything and save" : "Photo optional · every estimate stays editable"}
     >
+      {barcodeSupported ? (
+        <BarcodeScannerDialog open={scannerOpen} onOpenChange={setScannerOpen} onDetected={addScannedItem} />
+      ) : null}
+
       {!isEdit && (recentMeals.length > 0 || savedMeals.length > 0) ? (
         <div className="panel mb-4 p-4">
           <div className="flex items-center justify-between gap-2">
@@ -747,19 +787,33 @@ function AddMeal() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="name">Food name</Label>
-              {!isEdit ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 gap-1 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
-                  onClick={saveAsTemplate}
-                  disabled={saveMealTemplate.isPending}
-                >
-                  <Bookmark className="size-3" aria-hidden="true" />
-                  Save for later
-                </Button>
-              ) : null}
+              <div className="flex items-center gap-1">
+                {barcodeSupported ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 gap-1 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                    onClick={() => setScannerOpen(true)}
+                  >
+                    <ScanLine className="size-3" aria-hidden="true" />
+                    Scan barcode
+                  </Button>
+                ) : null}
+                {!isEdit ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 gap-1 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                    onClick={saveAsTemplate}
+                    disabled={saveMealTemplate.isPending}
+                  >
+                    <Bookmark className="size-3" aria-hidden="true" />
+                    Save for later
+                  </Button>
+                ) : null}
+              </div>
             </div>
             <div className="relative">
               <Input
