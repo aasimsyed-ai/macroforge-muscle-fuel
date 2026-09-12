@@ -1,15 +1,19 @@
 import { format, parseISO } from "date-fns";
 import { Bar, BarChart, ResponsiveContainer } from "recharts";
 
+import { guestActive } from "@/lib/guest";
 import { useRecentSessionVolumes } from "@/lib/workouts/hooks";
 
 /**
  * A compact "is your training load trending up" glance — so weight isn't the
  * only number on the dashboard. Renders nothing for guests, errors, or fewer
- * than two sessions, rather than showing an empty chart.
+ * than two sessions, rather than showing an empty chart. Guests never have
+ * workout data (workouts require an account), so the query is skipped
+ * entirely rather than firing a request that's guaranteed to fail.
  */
 export function StrengthMiniTrend() {
-  const volumes = useRecentSessionVolumes(8);
+  const isGuest = guestActive();
+  const volumes = useRecentSessionVolumes(8, { enabled: !isGuest });
   const data = volumes.data;
 
   if (volumes.isLoading || volumes.isError || !data || data.length < 2) return null;

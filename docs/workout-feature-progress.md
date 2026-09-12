@@ -33,6 +33,12 @@ User reported no way to edit a submitted workout (only view/delete existed). Add
 - **Bug fixed along the way**: `sessionDetailToExerciseDrafts` hardcoded every restored set's `completed` to `true`, silently un-skipping any set the user had marked incomplete. Now preserves the real value — matters for both this edit feature and the existing "copy a previous workout" feature.
 - Deployed and verified live (bundle `dashboard-H6AGQALW.js`).
 
+## QA fix pass — 2026-09-12
+- `replaceWorkoutSession()` now reports a failed delete instead of silently swallowing it: it returns `{ session, oldSessionRemoved }`, and `WorkoutLogger` shows a warning toast ("...old entry couldn't be removed. Please check Workout History.") when `oldSessionRemoved` is `false`, so a leftover duplicate is never invisible to the user.
+- Guests hitting the standalone `/log-workout` route (nav shortcut) now see the same "Workout tracking needs an account" notice `WorkoutDashboard` already showed, instead of being able to fill in a full workout form that only fails at save time. Extracted the shared markup into `WorkoutAccountRequired.tsx` so both surfaces use one component.
+- `StrengthMiniTrend` no longer queries `useRecentSessionVolumes` for guests (who never have workout data) — added an `enabled` option to the hook, mirroring the existing pattern on `useMeals`/`useMetrics`/`useWorkoutStats`.
+- Landing page copy no longer implies workout tracking works without an account, and the "photo-assisted" feature blurb now reflects that a food name is required (a photo alone isn't enough).
+
 ## Phase status
 | Phase | Scope | State | Verified |
 |---|---|---|---|

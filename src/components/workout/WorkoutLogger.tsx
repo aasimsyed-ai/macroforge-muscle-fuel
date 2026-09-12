@@ -177,8 +177,12 @@ export function WorkoutLogger({
     submittingRef.current = true;
     try {
       if (isEditing && initialData) {
-        await replace.mutateAsync({ oldId: initialData.sessionId, draft, bodyWeightKg });
-        toast.success("Workout updated");
+        const result = await replace.mutateAsync({ oldId: initialData.sessionId, draft, bodyWeightKg });
+        if (result.oldSessionRemoved) {
+          toast.success("Workout updated");
+        } else {
+          toast.warning("Workout updated, but the old entry couldn't be removed. Please check Workout History.");
+        }
       } else {
         await create.mutateAsync({ draft, bodyWeightKg });
         const moved = Math.round(totalVolume);

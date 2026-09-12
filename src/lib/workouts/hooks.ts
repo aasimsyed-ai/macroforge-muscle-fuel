@@ -54,9 +54,10 @@ export function useReplaceWorkout() {
   });
 }
 
-export function useRecentSessionVolumes(limit = 8) {
+export function useRecentSessionVolumes(limit = 8, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: [...WORKOUT_KEY, "recent-volumes", limit],
+    enabled: options?.enabled ?? true,
     queryFn: () => api.fetchRecentSessionVolumes(limit),
   });
 }
