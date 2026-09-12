@@ -16,6 +16,18 @@
  * analyzer into the `visionAnalyzer` slot below — nothing else needs to change.
  */
 
+/** One recognised food within a (possibly multi-item) estimate — for the itemized review UI. */
+export type EstimatedItem = {
+  label: string;
+  /** Approximate grams used for this item, or null when not meaningful (e.g. a generic fallback). */
+  grams: number | null;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  recognised: boolean;
+};
+
 export type MacroEstimate = {
   calories: number;
   protein: number;
@@ -26,6 +38,8 @@ export type MacroEstimate = {
   source: "reference_table" | "generic_density" | "vision_ai";
   matchedFood?: string;
   note: string;
+  /** Per-item breakdown when the estimator could tell items apart — always sums to the totals above. */
+  items?: EstimatedItem[];
 };
 
 export type AnalyzeInput = {
@@ -133,7 +147,7 @@ function round1(n: number) {
 }
 
 /** Split "oats + banana, 2 eggs and toast" into individual items. */
-function splitItems(text: string): string[] {
+export function splitItems(text: string): string[] {
   return text
     .split(/\s*(?:\+|,|;|\/|&|\band\b)\s*/)
     .map((s) => s.trim())
@@ -166,6 +180,8 @@ type ItemResult = {
   c: number;
   f: number;
   recognised: boolean;
+  /** Approximate total grams used for this item — for display only. */
+  grams: number;
 };
 
 function estimateItem(phrase: string, sharedGrams: number | null, isOnlyItem: boolean): ItemResult {
@@ -186,37 +202,41 @@ function estimateItem(phrase: string, sharedGrams: number | null, isOnlyItem: bo
   let p = 0;
   let c = 0;
   let f = 0;
+  let grams = 0;
 
   for (const ref of refs) {
-    let grams: number;
+    let refGrams: number;
     if (ref === primary && inlineGrams != null) {
-      grams = inlineGrams;
+      refGrams = inlineGrams;
     } else if (ref === primary && isOnlyItem && sharedGrams != null) {
-      grams = sharedGrams;
+      refGrams = sharedGrams;
     } else {
-      grams = ref.serve;
+      refGrams = ref.serve;
     }
 
-    if (light && /oil|butter|ghee/.test(ref.name)) grams *= 0.4;
+    if (light && /oil|butter|ghee/.test(ref.name)) refGrams *= 0.4;
 
-    const dryInBowl = ref.dry && grams >= 120;
-    const useGrams = dryInBowl ? 45 : grams;
+    const dryInBowl = ref.dry && refGrams >= 120;
+    const useGrams = dryInBowl ? 45 : refGrams;
     const factor = useGrams / 100;
     kcal += ref.kcal * factor;
     p += ref.p * factor;
     c += ref.c * factor;
     f += ref.f * factor;
+    grams += useGrams;
   }
 
   // Milk: added for a dry item served in a bowl, or when the wording says so.
   const saysMilk = /\b(with milk|in milk|cooked in milk|made with milk|and milk|doodh)\b/.test(text);
   const alreadyMilky = refs.some((r) => /milk/.test(r.name));
   if (!alreadyMilky && (allDry || saysMilk)) {
-    const mf = (allDry ? 200 : MILK_ADDON.ml) / 150;
+    const milkGrams = allDry ? 200 : MILK_ADDON.ml;
+    const mf = milkGrams / 150;
     kcal += MILK_ADDON.kcal * mf;
     p += MILK_ADDON.p * mf;
     c += MILK_ADDON.c * mf;
     f += MILK_ADDON.f * mf;
+    grams += milkGrams;
   }
 
   return {
@@ -226,6 +246,7 @@ function estimateItem(phrase: string, sharedGrams: number | null, isOnlyItem: bo
     c,
     f,
     recognised: hits.length > 0,
+    grams: Math.round(grams),
   };
 }
 
@@ -239,12 +260,24 @@ export const referenceAnalyzer: FoodAnalyzer = {
     const isSingle = items.length <= 1;
     const results = items.map((phrase) => estimateItem(phrase, grams && grams > 0 ? grams : null, isSingle));
 
-    const total = results.reduce(
-      (acc, r) => ({
-        kcal: acc.kcal + r.kcal,
-        p: acc.p + r.p,
-        c: acc.c + r.c,
-        f: acc.f + r.f,
+    // Built from the already-rounded per-item numbers (not a separately
+    // rounded raw sum) so the itemized list always adds up to exactly the
+    // total shown below it — no rounding drift between the two.
+    const publicItems: EstimatedItem[] = results.map((r) => ({
+      label: r.label,
+      grams: r.grams > 0 ? r.grams : null,
+      calories: Math.round(r.kcal),
+      protein: round1(r.p),
+      carbs: round1(r.c),
+      fat: round1(r.f),
+      recognised: r.recognised,
+    }));
+    const total = publicItems.reduce(
+      (acc, it) => ({
+        kcal: acc.kcal + it.calories,
+        p: acc.p + it.protein,
+        c: acc.c + it.carbs,
+        f: acc.f + it.fat,
       }),
       { kcal: 0, p: 0, c: 0, f: 0 },
     );
@@ -278,6 +311,7 @@ export const referenceAnalyzer: FoodAnalyzer = {
       source: recognisedCount ? "reference_table" : "generic_density",
       matchedFood,
       note: noteParts.join(". ") + ".",
+      items: publicItems,
     };
   },
 };
@@ -338,8 +372,28 @@ async function analyzeWithGemini(input: AnalyzeInput): Promise<MacroEstimate | n
       }),
     });
     if (!res.ok) return null;
-    const j = (await res.json()) as Partial<MacroEstimate> & { error?: string };
+    type GeminiItem = {
+      name?: string;
+      portion_g?: number;
+      calories?: number;
+      protein_g?: number;
+      carbs_g?: number;
+      fat_g?: number;
+    };
+    const j = (await res.json()) as Partial<MacroEstimate> & { error?: string; items?: GeminiItem[] };
     if (j.error || typeof j.calories !== "number") return null;
+    const items: EstimatedItem[] | undefined =
+      Array.isArray(j.items) && j.items.length > 0
+        ? j.items.map((it) => ({
+            label: String(it.name ?? "").trim() || "food",
+            grams: typeof it.portion_g === "number" ? Math.round(it.portion_g) : null,
+            calories: Math.round(Number(it.calories) || 0),
+            protein: round1(Number(it.protein_g) || 0),
+            carbs: round1(Number(it.carbs_g) || 0),
+            fat: round1(Number(it.fat_g) || 0),
+            recognised: true,
+          }))
+        : undefined;
     return {
       calories: j.calories,
       protein: Number(j.protein) || 0,
@@ -349,6 +403,7 @@ async function analyzeWithGemini(input: AnalyzeInput): Promise<MacroEstimate | n
       source: "vision_ai",
       matchedFood: j.matchedFood ?? "meal from photo",
       note: j.note ?? "AI photo estimate — approximate, please check the numbers before saving.",
+      items,
     };
   } catch {
     return null;

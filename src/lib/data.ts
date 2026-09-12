@@ -3,6 +3,7 @@ import { format } from "date-fns";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import { splitItems } from "@/lib/food-estimate";
 import {
   guestActive,
   guestAllMeals,
@@ -322,6 +323,77 @@ export function useRecentMeals(limit = 12) {
         if (out.length >= limit) break;
       }
       return out;
+    },
+  });
+}
+
+export interface FrequentFood {
+  /** Lower-cased, trimmed food phrase as split out of a logged meal's name. */
+  name: string;
+  count: number;
+}
+
+/**
+ * Parses each logged meal's name into individual food phrases (the same
+ * +/,/and splitter the estimator itself uses on "2 eggs + toast + banana")
+ * and ranks by how often each phrase recurs across meal history — distinct
+ * from a whole repeated meal combo, e.g. "2 eggs + toast" logged 4 times and
+ * "2 eggs + oats" logged 3 times both count toward "2 eggs" (7). A food
+ * split out of only one logged meal isn't "frequent," so singles are
+ * excluded.
+ */
+export function rankFoodsByFrequency(mealNames: string[], limit: number): FrequentFood[] {
+  const byFood = new Map<string, number>();
+  for (const name of mealNames) {
+    for (const phrase of splitItems(name.toLowerCase())) {
+      const key = phrase.trim();
+      if (!key) continue;
+      byFood.set(key, (byFood.get(key) ?? 0) + 1);
+    }
+  }
+  return [...byFood.entries()]
+    .filter(([, count]) => count >= 2)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([name, count]) => ({ name, count }));
+}
+
+const FREQUENT_FOODS_WINDOW_DAYS = 90;
+
+/**
+ * Individual foods logged repeatedly over time — the "Frequent" half of the
+ * Recent/Frequent switch on Add Meal. Lazy: pass `enabled: false` until the
+ * user actually asks for it, so viewing "Recent" (the default) never pays
+ * for this query. Only meal names are fetched — no macros — since applying a
+ * frequent food re-runs the normal auto-estimate rather than replaying an
+ * old combined meal's totals.
+ */
+export function useFrequentFoods(limit = 8, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ["meals", "frequent-foods", limit],
+    enabled: options?.enabled ?? true,
+    staleTime: 1000 * 60,
+    queryFn: async (): Promise<FrequentFood[]> => {
+      if (guestActive()) {
+        return rankFoodsByFrequency(
+          guestAllMeals().map((m) => m.name),
+          limit,
+        );
+      }
+      const userId = await requireUserId();
+      const since = new Date();
+      since.setDate(since.getDate() - FREQUENT_FOODS_WINDOW_DAYS);
+      const { data, error } = await supabase
+        .from("meals")
+        .select("name")
+        .eq("user_id", userId)
+        .gte("eaten_at", since.toISOString())
+        .limit(300);
+      if (error) throw error;
+      return rankFoodsByFrequency(
+        (data ?? []).map((row) => row.name),
+        limit,
+      );
     },
   });
 }
