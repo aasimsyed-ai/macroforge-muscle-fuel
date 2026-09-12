@@ -10,11 +10,14 @@ import {
   guestAllMetrics,
   guestCreateMeal,
   guestDeleteMeal,
+  guestDeleteMealTemplate,
   guestGetGoals,
   guestGetMeal,
   guestGetProfile,
+  guestListMealTemplates,
   guestListMeals,
   guestListMetrics,
+  guestSaveMealTemplate,
   guestSaveMetric,
   guestUpdateGoals,
   guestUpdateMeal,
@@ -395,6 +398,75 @@ export function useFrequentFoods(limit = 8, options?: { enabled?: boolean }) {
         limit,
       );
     },
+  });
+}
+
+const SAVED_MEALS_KEY = ["meals", "saved-templates"] as const;
+
+/**
+ * User-curated meal templates ("Saved Meals") — distinct from Recent (recency)
+ * and Frequent (auto-ranked by count): these only ever change when the user
+ * explicitly saves or deletes one. Surfaces a genuine error (e.g. the
+ * meal_templates table not existing yet) rather than swallowing it, so the
+ * UI can show a clear "not set up yet" state instead of a silent empty list —
+ * same precedent as the rest of this app's not-yet-migrated features.
+ */
+export function useSavedMeals(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: SAVED_MEALS_KEY,
+    enabled: options?.enabled ?? true,
+    staleTime: 1000 * 60,
+    queryFn: async (): Promise<MealTemplate[]> => {
+      if (guestActive()) return guestListMealTemplates();
+      const userId = await requireUserId();
+      const { data, error } = await supabase
+        .from("meal_templates")
+        .select("name, category, serving_amount, calories, protein_g, carbs_g, fat_g, is_estimate, estimate_source")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map((t) => ({
+        name: t.name,
+        category: t.category,
+        serving_amount: t.serving_amount,
+        calories: Number(t.calories),
+        protein_g: Number(t.protein_g),
+        carbs_g: Number(t.carbs_g),
+        fat_g: Number(t.fat_g),
+        is_estimate: t.is_estimate,
+        estimate_source: t.estimate_source,
+      }));
+    },
+  });
+}
+
+/** Upserts by (user, name) — saving under an existing name replaces it rather than duplicating. */
+export function useSaveMealTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (template: MealTemplate) => {
+      if (guestActive()) return guestSaveMealTemplate(template);
+      const userId = await requireUserId();
+      const { error } = await supabase
+        .from("meal_templates")
+        .upsert({ user_id: userId, ...template }, { onConflict: "user_id,name" });
+      if (error) throw error;
+      return template;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: SAVED_MEALS_KEY }),
+  });
+}
+
+export function useDeleteMealTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (name: string) => {
+      if (guestActive()) return guestDeleteMealTemplate(name);
+      const userId = await requireUserId();
+      const { error } = await supabase.from("meal_templates").delete().eq("user_id", userId).eq("name", name);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: SAVED_MEALS_KEY }),
   });
 }
 

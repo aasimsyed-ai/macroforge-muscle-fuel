@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { format } from "date-fns";
-import { Camera, Check, ChevronDown, ChevronRight, RotateCcw, Sparkles, X } from "lucide-react";
+import { Bookmark, Camera, Check, ChevronDown, ChevronRight, RotateCcw, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -20,10 +20,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
   useCreateMeal,
+  useDeleteMealTemplate,
   useFrequentFoods,
   useMeal,
   useMealPhotoUrl,
   useRecentMeals,
+  useSaveMealTemplate,
+  useSavedMeals,
   useUpdateMeal,
   type FrequentFood,
   type MealTemplate,
@@ -86,20 +89,37 @@ function makeEmptyForm() {
   };
 }
 
-function QuickAddChip({ meal, onClick }: { meal: MealTemplate; onClick: () => void }) {
+function QuickAddChip({
+  meal,
+  onClick,
+  onDelete,
+}: {
+  meal: MealTemplate;
+  onClick: () => void;
+  /** Only saved (user-curated) meals are deletable — recent/frequent chips are derived, not owned. */
+  onDelete?: () => void;
+}) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded-full border border-border bg-card px-3 py-1.5 text-left text-xs transition-colors hover:border-primary hover:bg-secondary"
-    >
-      <span className="font-medium">{meal.name}</span>
-      <span className="text-muted-foreground">
-        {" · "}
-        {Math.round(meal.calories)} kcal
-        {meal.serving_amount ? ` · ${meal.serving_amount}` : ""}
-      </span>
-    </button>
+    <span className="inline-flex items-center overflow-hidden rounded-full border border-border bg-card transition-colors hover:border-primary hover:bg-secondary">
+      <button type="button" onClick={onClick} className="px-3 py-1.5 text-left text-xs">
+        <span className="font-medium">{meal.name}</span>
+        <span className="text-muted-foreground">
+          {" · "}
+          {Math.round(meal.calories)} kcal
+          {meal.serving_amount ? ` · ${meal.serving_amount}` : ""}
+        </span>
+      </button>
+      {onDelete ? (
+        <button
+          type="button"
+          onClick={onDelete}
+          aria-label={`Remove saved meal ${meal.name}`}
+          className="pr-2.5 text-muted-foreground hover:text-destructive"
+        >
+          <X className="size-3" />
+        </button>
+      ) : null}
+    </span>
   );
 }
 
@@ -238,8 +258,11 @@ function AddMeal() {
   const update = useUpdateMeal();
   const editingMeal = useMeal(editId ?? null);
   const recent = useRecentMeals();
-  const [quickAddTab, setQuickAddTab] = useState<"recent" | "frequent">("recent");
+  const [quickAddTab, setQuickAddTab] = useState<"recent" | "frequent" | "saved">("recent");
   const frequent = useFrequentFoods(8, { enabled: quickAddTab === "frequent" });
+  const saved = useSavedMeals({ enabled: quickAddTab === "saved" });
+  const saveMealTemplate = useSaveMealTemplate();
+  const deleteMealTemplate = useDeleteMealTemplate();
   const fileInput = useRef<HTMLInputElement>(null);
   const [justSaved, celebrate] = useSaveFeedback();
 
@@ -354,6 +377,40 @@ function AddMeal() {
   // replaying one past meal's combined totals.
   function applyFrequentFood(food: FrequentFood) {
     editDescription({ name: food.name });
+  }
+
+  // Saves the form's current values as a reusable template, under the food
+  // name already typed — no separate naming step, so it stays one tap from
+  // an already-filled form. Saving again under the same name replaces it.
+  async function saveAsTemplate() {
+    if (!form.name.trim()) {
+      toast.error("Add a food name first.");
+      return;
+    }
+    try {
+      await saveMealTemplate.mutateAsync({
+        name: form.name.trim(),
+        category: form.category,
+        serving_amount: form.serving_amount.trim() || null,
+        calories: Number(form.calories || 0),
+        protein_g: Number(form.protein_g || 0),
+        carbs_g: Number(form.carbs_g || 0),
+        fat_g: Number(form.fat_g || 0),
+        is_estimate: estimate !== null,
+        estimate_source: estimate?.source ?? null,
+      });
+      toast.success(`Saved "${form.name.trim()}" for quick logging later`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save this meal");
+    }
+  }
+
+  async function removeSavedMeal(name: string) {
+    try {
+      await deleteMealTemplate.mutateAsync(name);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not remove that saved meal");
+    }
   }
 
   // Auto-estimate: whenever there's a food name, fill calories/macros with an
@@ -549,24 +606,30 @@ function AddMeal() {
   const saving = create.isPending || update.isPending;
   const recentMeals = recent.data ?? [];
   const frequentFoods = frequent.data ?? [];
+  const savedMeals = saved.data ?? [];
+  const TAB_LABEL: Record<typeof quickAddTab, string> = {
+    recent: "Repeat a recent meal",
+    frequent: "Foods you log often",
+    saved: "Your saved meals",
+  };
 
   return (
     <AppShell
       title={isEdit ? "Edit Meal" : "Add Meal"}
       subtitle={isEdit ? "Update anything and save" : "Photo optional · every estimate stays editable"}
     >
-      {!isEdit && recentMeals.length > 0 ? (
+      {!isEdit && (recentMeals.length > 0 || savedMeals.length > 0) ? (
         <div className="panel mb-4 p-4">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {quickAddTab === "recent" ? "Repeat a recent meal" : "Foods you log often"}
+              {TAB_LABEL[quickAddTab]}
             </p>
             <div
               role="tablist"
               aria-label="Quick add source"
               className="inline-flex shrink-0 rounded-full border border-border bg-secondary p-0.5 text-[11px]"
             >
-              {(["recent", "frequent"] as const).map((tab) => (
+              {(["recent", "frequent", "saved"] as const).map((tab) => (
                 <button
                   key={tab}
                   type="button"
@@ -585,14 +648,33 @@ function AddMeal() {
           <div className="mt-2 flex flex-wrap gap-2">
             {quickAddTab === "recent" ? (
               recentMeals.map((t) => <QuickAddChip key={t.name} meal={t} onClick={() => applyTemplate(t)} />)
-            ) : frequent.isLoading ? (
+            ) : quickAddTab === "frequent" ? (
+              frequent.isLoading ? (
+                <Skeleton className="h-7 w-40 rounded-full" />
+              ) : frequentFoods.length > 0 ? (
+                frequentFoods.map((food) => (
+                  <FrequentFoodChip key={food.name} food={food} onClick={() => applyFrequentFood(food)} />
+                ))
+              ) : (
+                <p className="text-xs text-muted-foreground">Log a meal a couple of times to see it here.</p>
+              )
+            ) : saved.isLoading ? (
               <Skeleton className="h-7 w-40 rounded-full" />
-            ) : frequentFoods.length > 0 ? (
-              frequentFoods.map((food) => (
-                <FrequentFoodChip key={food.name} food={food} onClick={() => applyFrequentFood(food)} />
+            ) : saved.isError ? (
+              <p className="text-xs text-muted-foreground">Saved meals aren't set up yet.</p>
+            ) : savedMeals.length > 0 ? (
+              savedMeals.map((t) => (
+                <QuickAddChip
+                  key={t.name}
+                  meal={t}
+                  onClick={() => applyTemplate(t)}
+                  onDelete={() => removeSavedMeal(t.name)}
+                />
               ))
             ) : (
-              <p className="text-xs text-muted-foreground">Log a meal a couple of times to see it here.</p>
+              <p className="text-xs text-muted-foreground">
+                Save a meal from the form below to see it here.
+              </p>
             )}
           </div>
         </div>
@@ -654,7 +736,22 @@ function AddMeal() {
 
         <section className="panel space-y-4 p-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Food name</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="name">Food name</Label>
+              {!isEdit ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 gap-1 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                  onClick={saveAsTemplate}
+                  disabled={saveMealTemplate.isPending}
+                >
+                  <Bookmark className="size-3" aria-hidden="true" />
+                  Save for later
+                </Button>
+              ) : null}
+            </div>
             <Input
               id="name"
               required

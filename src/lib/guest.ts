@@ -6,7 +6,7 @@
  * data is pushed up to Supabase and the local copy is cleared.
  */
 import { supabase } from "@/integrations/supabase/client";
-import type { DailyMetric, Goals, Meal, MealInput, MealUpdate, Profile } from "@/lib/data";
+import type { DailyMetric, Goals, Meal, MealInput, MealTemplate, MealUpdate, Profile } from "@/lib/data";
 
 const KEY = "mf:guest:v1";
 export const TRIAL_DAYS = 3;
@@ -18,6 +18,8 @@ type GuestBlob = {
   goals: Goals;
   meals: Meal[];
   metrics: DailyMetric[];
+  /** Optional so blobs saved before Saved Meals shipped still parse — see read(). */
+  mealTemplates?: MealTemplate[];
 };
 
 function now(): string {
@@ -35,7 +37,11 @@ function uid(): string {
 function read(): GuestBlob | null {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as GuestBlob) : null;
+    if (!raw) return null;
+    const blob = JSON.parse(raw) as GuestBlob;
+    // Backfill for guest sessions started before Saved Meals shipped.
+    if (!blob.mealTemplates) blob.mealTemplates = [];
+    return blob;
   } catch {
     return null;
   }
@@ -92,7 +98,7 @@ export function guestActive(): boolean {
 
 export function ensureGuest(): void {
   if (read()) return;
-  write({ startedAt: now(), profile: freshProfile(), goals: freshGoals(), meals: [], metrics: [] });
+  write({ startedAt: now(), profile: freshProfile(), goals: freshGoals(), meals: [], metrics: [], mealTemplates: [] });
 }
 
 export function guestDaysUsed(): number {
@@ -240,6 +246,33 @@ export function guestDeleteMeal(id: string): void {
   write(blob);
 }
 
+/* ----------------------------- saved meals -------------------------------- */
+
+export function guestListMealTemplates(): MealTemplate[] {
+  return read()?.mealTemplates ?? [];
+}
+
+/** Upserts by exact name — saving under a name that already exists replaces it. */
+export function guestSaveMealTemplate(template: MealTemplate): MealTemplate {
+  ensureGuest();
+  const blob = read()!;
+  const idx = blob.mealTemplates!.findIndex((t) => t.name === template.name);
+  if (idx >= 0) {
+    blob.mealTemplates![idx] = template;
+  } else {
+    blob.mealTemplates!.push(template);
+  }
+  write(blob);
+  return template;
+}
+
+export function guestDeleteMealTemplate(name: string): void {
+  const blob = read();
+  if (!blob) return;
+  blob.mealTemplates = (blob.mealTemplates ?? []).filter((t) => t.name !== name);
+  write(blob);
+}
+
 export function guestSaveMetric(input: Partial<DailyMetric> & { metric_date: string }): DailyMetric {
   ensureGuest();
   const blob = read()!;
@@ -349,6 +382,33 @@ export async function migrateGuestToCloud(): Promise<boolean> {
         })),
         { onConflict: "user_id,metric_date" },
       );
+    }
+
+    if (blob.mealTemplates?.length) {
+      // Best-effort: the meal_templates table may not exist yet on this
+      // Supabase project (migration not applied) — a saved meal or two
+      // failing to carry over shouldn't block the rest of the migration.
+      await supabase
+        .from("meal_templates")
+        .upsert(
+          blob.mealTemplates.map((t) => ({
+            user_id: userId,
+            name: t.name,
+            category: t.category,
+            serving_amount: t.serving_amount,
+            calories: t.calories,
+            protein_g: t.protein_g,
+            carbs_g: t.carbs_g,
+            fat_g: t.fat_g,
+            is_estimate: t.is_estimate,
+            estimate_source: t.estimate_source,
+          })),
+          { onConflict: "user_id,name" },
+        )
+        .then(
+          () => undefined,
+          () => undefined,
+        );
     }
   } finally {
     clearGuest();
