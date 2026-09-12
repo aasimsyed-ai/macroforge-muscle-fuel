@@ -326,6 +326,89 @@ export function useRecentMeals(limit = 12) {
   });
 }
 
+export interface FrequentMealSourceRow {
+  name: string;
+  category: string;
+  serving_amount: string | null;
+  calories: number | string;
+  protein_g: number | string;
+  carbs_g: number | string;
+  fat_g: number | string;
+  is_estimate: boolean;
+  estimate_source: string | null;
+}
+
+/**
+ * Groups meal rows by lower-cased name and ranks by how many times each was
+ * logged — distinct from useRecentMeals, which is purely recency-based. A
+ * food logged only once isn't "frequent," so singles are excluded. `rows`
+ * must already be ordered most-recent-first so each group keeps its latest
+ * occurrence for display (name/portion/macros).
+ */
+export function rankMealsByFrequency(rows: FrequentMealSourceRow[], limit: number): MealTemplate[] {
+  const byName = new Map<string, { count: number; latest: FrequentMealSourceRow }>();
+  for (const row of rows) {
+    const key = row.name.trim().toLowerCase();
+    if (!key) continue;
+    const existing = byName.get(key);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      byName.set(key, { count: 1, latest: row });
+    }
+  }
+  return [...byName.values()]
+    .filter((entry) => entry.count >= 2)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit)
+    .map(({ latest: m }) => ({
+      name: m.name,
+      category: m.category,
+      serving_amount: m.serving_amount,
+      calories: Number(m.calories),
+      protein_g: Number(m.protein_g),
+      carbs_g: Number(m.carbs_g),
+      fat_g: Number(m.fat_g),
+      is_estimate: m.is_estimate,
+      estimate_source: m.estimate_source,
+    }));
+}
+
+const FREQUENT_MEALS_WINDOW_DAYS = 90;
+
+/**
+ * Foods logged repeatedly over time — the "Frequent" half of the Recent/
+ * Frequent switch on Add Meal. Lazy: pass `enabled: false` until the user
+ * actually asks for it, so viewing "Recent" (the default) never pays for
+ * this query.
+ */
+export function useFrequentMeals(limit = 8, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ["meals", "frequent-templates", limit],
+    enabled: options?.enabled ?? true,
+    staleTime: 1000 * 60,
+    queryFn: async (): Promise<MealTemplate[]> => {
+      if (guestActive()) {
+        return rankMealsByFrequency(guestAllMeals(), limit);
+      }
+      const userId = await requireUserId();
+      const since = new Date();
+      since.setDate(since.getDate() - FREQUENT_MEALS_WINDOW_DAYS);
+      const { data, error } = await supabase
+        .from("meals")
+        .select(
+          "name, category, serving_amount, calories, protein_g, carbs_g, fat_g, is_estimate, estimate_source, eaten_at",
+        )
+        .eq("user_id", userId)
+        .gte("eaten_at", since.toISOString())
+        .order("eaten_at", { ascending: false })
+        .limit(300);
+      if (error) throw error;
+      return rankMealsByFrequency(data ?? [], limit);
+    },
+  });
+}
+
 export function useMealPhotoUrl(path: string | null) {
   return useQuery({
     queryKey: ["meal-photo", path],
