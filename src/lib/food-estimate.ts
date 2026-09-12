@@ -147,7 +147,7 @@ function round1(n: number) {
 }
 
 /** Split "oats + banana, 2 eggs and toast" into individual items. */
-function splitItems(text: string): string[] {
+export function splitItems(text: string): string[] {
   return text
     .split(/\s*(?:\+|,|;|\/|&|\band\b)\s*/)
     .map((s) => s.trim())

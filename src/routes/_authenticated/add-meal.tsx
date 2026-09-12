@@ -20,11 +20,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
   useCreateMeal,
-  useFrequentMeals,
+  useFrequentFoods,
   useMeal,
   useMealPhotoUrl,
   useRecentMeals,
   useUpdateMeal,
+  type FrequentFood,
   type MealTemplate,
 } from "@/lib/data";
 import {
@@ -102,6 +103,24 @@ function QuickAddChip({ meal, onClick }: { meal: MealTemplate; onClick: () => vo
   );
 }
 
+/**
+ * A single food (not a whole meal) — no macros shown, since tapping it fills
+ * the Food-name field and lets the normal auto-estimate produce fresh
+ * numbers, rather than replaying one past meal's combined totals.
+ */
+function FrequentFoodChip({ food, onClick }: { food: FrequentFood; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-full border border-border bg-card px-3 py-1.5 text-left text-xs capitalize transition-colors hover:border-primary hover:bg-secondary"
+    >
+      <span className="font-medium">{food.name}</span>
+      <span className="text-muted-foreground"> · logged {food.count}×</span>
+    </button>
+  );
+}
+
 /** One row of the itemized review list — shown only when a meal has more than one recognised food. */
 function ItemRow({
   item,
@@ -122,22 +141,27 @@ function ItemRow({
         <button
           type="button"
           onClick={onToggleExpand}
-          className="flex min-w-0 flex-1 items-center gap-1 text-left"
+          className="shrink-0 text-muted-foreground"
           aria-expanded={expanded}
           aria-label={`${expanded ? "Hide" : "Show"} carbs and fat for ${item.label}`}
         >
           {expanded ? (
-            <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <ChevronDown className="size-3.5" aria-hidden="true" />
           ) : (
-            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <ChevronRight className="size-3.5" aria-hidden="true" />
           )}
-          <span className="min-w-0 flex-1">
-            <span className="block truncate font-medium">{item.label}</span>
-            {item.grams != null ? (
-              <span className="text-[10px] text-muted-foreground">~{item.grams} g</span>
-            ) : null}
-          </span>
         </button>
+        <div className="min-w-0 flex-1">
+          <Input
+            value={item.label}
+            onChange={(e) => onChange({ label: e.target.value })}
+            aria-label="Food name"
+            className="h-6 w-full border-none bg-transparent px-1 font-medium shadow-none focus-visible:ring-1"
+          />
+          {item.grams != null ? (
+            <span className="block px-1 text-[10px] text-muted-foreground">~{item.grams} g</span>
+          ) : null}
+        </div>
         <Input
           type="number"
           inputMode="decimal"
@@ -215,7 +239,7 @@ function AddMeal() {
   const editingMeal = useMeal(editId ?? null);
   const recent = useRecentMeals();
   const [quickAddTab, setQuickAddTab] = useState<"recent" | "frequent">("recent");
-  const frequent = useFrequentMeals(8, { enabled: quickAddTab === "frequent" });
+  const frequent = useFrequentFoods(8, { enabled: quickAddTab === "frequent" });
   const fileInput = useRef<HTMLInputElement>(null);
   const [justSaved, celebrate] = useSaveFeedback();
 
@@ -322,6 +346,14 @@ function AddMeal() {
     setItems([]);
     setExpandedItem(null);
     toast.success(`Loaded "${t.name}" — edit anything before saving`);
+  }
+
+  // A frequent food isn't a saved meal with known macros — it's just a name.
+  // Put it in the Food-name field exactly as if the user had typed it, so the
+  // normal auto-estimate below produces a fresh estimate rather than
+  // replaying one past meal's combined totals.
+  function applyFrequentFood(food: FrequentFood) {
+    editDescription({ name: food.name });
   }
 
   // Auto-estimate: whenever there's a food name, fill calories/macros with an
@@ -516,7 +548,7 @@ function AddMeal() {
   const previewUrl = photoUrl ?? (existingPhotoPath ? existingPhoto.data ?? null : null);
   const saving = create.isPending || update.isPending;
   const recentMeals = recent.data ?? [];
-  const frequentMeals = frequent.data ?? [];
+  const frequentFoods = frequent.data ?? [];
 
   return (
     <AppShell
@@ -555,8 +587,10 @@ function AddMeal() {
               recentMeals.map((t) => <QuickAddChip key={t.name} meal={t} onClick={() => applyTemplate(t)} />)
             ) : frequent.isLoading ? (
               <Skeleton className="h-7 w-40 rounded-full" />
-            ) : frequentMeals.length > 0 ? (
-              frequentMeals.map((t) => <QuickAddChip key={t.name} meal={t} onClick={() => applyTemplate(t)} />)
+            ) : frequentFoods.length > 0 ? (
+              frequentFoods.map((food) => (
+                <FrequentFoodChip key={food.name} food={food} onClick={() => applyFrequentFood(food)} />
+              ))
             ) : (
               <p className="text-xs text-muted-foreground">Log a meal a couple of times to see it here.</p>
             )}
