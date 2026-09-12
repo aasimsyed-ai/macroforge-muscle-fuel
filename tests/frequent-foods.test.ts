@@ -45,4 +45,12 @@ describe("rankFoodsByFrequency", () => {
     const names = [...Array(2).fill("a"), ...Array(2).fill("b"), ...Array(2).fill("c")];
     expect(rankFoodsByFrequency(names, 2)).toHaveLength(2);
   });
+
+  it("counts a repeated phrase within one meal only once, not once per occurrence", () => {
+    // "egg + egg" logged twice should credit "egg" with 2 (two meals it
+    // appeared in), not 4 (two occurrences x two meals).
+    const names = ["egg + egg", "egg + egg"];
+    const ranked = rankFoodsByFrequency(names, 8);
+    expect(ranked).toEqual([{ name: "egg", count: 2 }]);
+  });
 });

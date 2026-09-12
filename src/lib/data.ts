@@ -348,9 +348,15 @@ export interface FrequentFood {
 export function rankFoodsByFrequency(mealNames: string[], limit: number): FrequentFood[] {
   const byFood = new Map<string, number>();
   for (const name of mealNames) {
-    for (const phrase of splitItems(name.toLowerCase())) {
-      const key = phrase.trim();
-      if (!key) continue;
+    // Dedupe phrases within a single meal first — "egg + egg" should count
+    // as one meal containing egg, not two, so a food's count reflects how
+    // many separate meals it appeared in.
+    const phrasesInThisMeal = new Set(
+      splitItems(name.toLowerCase())
+        .map((phrase) => phrase.trim())
+        .filter(Boolean),
+    );
+    for (const key of phrasesInThisMeal) {
       byFood.set(key, (byFood.get(key) ?? 0) + 1);
     }
   }

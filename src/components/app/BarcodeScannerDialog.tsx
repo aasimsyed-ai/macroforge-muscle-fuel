@@ -55,6 +55,7 @@ export function BarcodeScannerDialog({
     let cancelled = false;
     let stream: MediaStream | null = null;
     let frameHandle: number | null = null;
+    let notFoundTimeout: number | null = null;
     setState("starting");
 
     async function run() {
@@ -96,7 +97,15 @@ export function BarcodeScannerDialog({
               onOpenChange(false);
               return;
             }
+            // Not found: show it briefly, then keep scanning automatically
+            // rather than dead-ending the dialog — the user can just point
+            // the camera at a different product without closing/reopening.
             setState("not-found");
+            notFoundTimeout = window.setTimeout(() => {
+              if (cancelled) return;
+              setState("scanning");
+              frameHandle = window.requestAnimationFrame(() => void scanFrame());
+            }, 2000);
             return;
           }
         } catch {
@@ -112,6 +121,7 @@ export function BarcodeScannerDialog({
     return () => {
       cancelled = true;
       if (frameHandle !== null) window.cancelAnimationFrame(frameHandle);
+      if (notFoundTimeout !== null) window.clearTimeout(notFoundTimeout);
       stream?.getTracks().forEach((track) => track.stop());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
