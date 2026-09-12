@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { format } from "date-fns";
-import { Bookmark, Camera, Check, ChevronDown, ChevronRight, RotateCcw, Sparkles, X } from "lucide-react";
+import { Bookmark, Camera, Check, ChevronDown, ChevronRight, Mic, MicOff, RotateCcw, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -41,6 +41,7 @@ import {
 import { playSaveTone, triggerHaptic } from "@/lib/celebrationEffects";
 import { MEAL_CATEGORIES, round } from "@/lib/nutrition";
 import { useSaveFeedback } from "@/lib/useSaveFeedback";
+import { useSpeechRecognition } from "@/lib/useSpeechRecognition";
 
 const searchSchema = z.object({ edit: z.string().optional() });
 
@@ -303,6 +304,14 @@ function AddMeal() {
       setTouched(NO_MACROS_TOUCHED);
     }
   }
+
+  // Voice logging: the transcript replaces the Food-name field exactly like
+  // typing would, so the existing auto-estimate effect below picks it up for
+  // free — no separate estimation path needed. Free, on-device, no server
+  // call; simply hidden on browsers without native speech recognition
+  // (notably iOS Safari), same graceful-degradation approach as every other
+  // best-effort feature in this app.
+  const speech = useSpeechRecognition((transcript) => editDescription({ name: transcript }));
 
   const targetId = editId ?? null;
   const ready = syncedId === targetId;
@@ -752,16 +761,34 @@ function AddMeal() {
                 </Button>
               ) : null}
             </div>
-            <Input
-              id="name"
-              required
-              placeholder="Grilled chicken breast + rice + salad"
-              value={form.name}
-              onChange={(e) => editDescription({ name: e.target.value })}
-            />
+            <div className="relative">
+              <Input
+                id="name"
+                required
+                placeholder="Grilled chicken breast + rice + salad"
+                value={form.name}
+                onChange={(e) => editDescription({ name: e.target.value })}
+                className={speech.supported ? "pr-10" : undefined}
+              />
+              {speech.supported ? (
+                <button
+                  type="button"
+                  onClick={() => (speech.listening ? speech.stop() : speech.start())}
+                  aria-label={speech.listening ? "Stop voice input" : "Add food by voice"}
+                  aria-pressed={speech.listening}
+                  className={`absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 transition-colors ${
+                    speech.listening
+                      ? "animate-pulse text-destructive"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {speech.listening ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+                </button>
+              ) : null}
+            </div>
             <p className="text-[11px] text-muted-foreground">
               List everything you ate, separated by <strong>+</strong> — e.g. “2 eggs + toast + 1 apple”. Each item is
-              estimated and added up.
+              estimated and added up.{speech.supported ? " Or tap the mic and say it." : ""}
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
