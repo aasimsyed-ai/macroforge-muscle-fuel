@@ -42,9 +42,47 @@ function readCappedTail(path, cap, fallback = "(not available)") {
   return `[... truncated, ${text.length - cap} earlier characters ...]\n\n${text.slice(-cap)}`;
 }
 
+function checkPassed(outcome) {
+  return outcome === "success" || outcome === "skipped";
+}
+
 function outcomeLine(name, outcome) {
   const label = outcome === "success" ? "PASS" : outcome === "skipped" ? "SKIPPED" : "FAIL";
   return `- ${name}: ${label}`;
+}
+
+/**
+ * The verdict header and the Build/lint/test results section are computed
+ * here, from the CI step outcomes directly — never from the model's text.
+ * An earlier version asked the model to transcribe these values into its
+ * own output, and it silently misreported a genuine failure as a pass
+ * (twice, across two different mitigations) despite explicit instructions
+ * to copy them verbatim. Facts we already have in code should never
+ * round-trip through an LLM to come back out the other side.
+ *
+ * SHIP requires all four checks to have genuinely passed. This is
+ * deliberately strict rather than trying to have the model judge whether a
+ * given failure is "pre-existing" or "caused by this diff" — that
+ * distinction still shows up in the model's Findings section as a note,
+ * but it no longer gets to flip the ship/no-ship gate itself.
+ */
+function deterministicSection() {
+  const outcomes = {
+    lint: process.env.LINT_EXIT,
+    typecheck: process.env.TYPECHECK_EXIT,
+    build: process.env.BUILD_EXIT,
+    test: process.env.TEST_EXIT,
+  };
+  const allPassed = Object.values(outcomes).every(checkPassed);
+  const verdict = allPassed ? "SHIP" : "NEEDS FIXES";
+
+  const lines = [
+    `**QA VERDICT: ${verdict}**`,
+    "",
+    "### Build/lint/test results",
+    ...Object.entries(outcomes).map(([name, outcome]) => outcomeLine(name, outcome)),
+  ];
+  return { header: lines.join("\n"), allPassed };
 }
 
 function buildPrompt() {
@@ -55,7 +93,7 @@ function buildPrompt() {
     `Base branch: ${process.env.PR_BASE}`,
     `Head commit: ${process.env.PR_HEAD_SHA}`,
     "",
-    "AUTHORITATIVE check outcomes (from CI, already run). Copy these PASS/FAIL values verbatim into your 'Build/lint/test results' section — do not re-derive them from the log excerpts below, which may be truncated:",
+    "AUTHORITATIVE check outcomes (from CI, already run — a results table using exactly these values has already been posted above your response, so do not repeat one yourself). If a check below FAILED, you may still mention it in Findings — note there whether it looks caused by this diff or pre-existing/unrelated:",
     outcomeLine("lint", process.env.LINT_EXIT),
     outcomeLine("typecheck", process.env.TYPECHECK_EXIT),
     outcomeLine("build", process.env.BUILD_EXIT),
@@ -168,14 +206,20 @@ function fallbackReport(reason) {
 
 async function main() {
   const prompt = buildPrompt();
+  const footer = `\n\n---\n_Automated, read-only QA review of commit \`${(process.env.PR_HEAD_SHA || "").slice(0, 7)}\`. This bot cannot edit code, push, merge, or deploy. A new commit on this PR will trigger a fresh review._`;
+
   let report;
   try {
-    report = await callQaProvider(prompt);
+    // The verdict + results table come from deterministicSection() (the
+    // actual CI outcomes), never from the model — see its doc comment for
+    // why. The model only contributes the Findings / What looks good
+    // sections underneath.
+    const { header } = deterministicSection();
+    const findings = await callQaProvider(prompt);
+    report = `${header}\n\n${findings}`;
   } catch (err) {
     report = fallbackReport(err instanceof Error ? err.message : String(err));
   }
-
-  const footer = `\n\n---\n_Automated, read-only QA review of commit \`${(process.env.PR_HEAD_SHA || "").slice(0, 7)}\`. This bot cannot edit code, push, merge, or deploy. A new commit on this PR will trigger a fresh review._`;
 
   writeFileSync("qa-review-output.md", report + footer);
 }
