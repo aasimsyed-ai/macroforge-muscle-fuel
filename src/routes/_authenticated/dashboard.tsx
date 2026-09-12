@@ -1,19 +1,32 @@
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { format } from "date-fns";
+import { format, subDays } from "date-fns";
 import { Download, Droplets, Dumbbell, Moon, Pill, Scale, Ruler } from "lucide-react";
+import { toast } from "sonner";
 import { z } from "zod";
 
 import { AppShell } from "@/components/app/AppShell";
+import { DailyCompletionCard } from "@/components/app/DailyCompletionCard";
+import { DayCelebration } from "@/components/app/DayCelebration";
 import { MealList } from "@/components/app/MealList";
 import { MetricsQuickLog } from "@/components/app/MetricsQuickLog";
 import { ProgressRing } from "@/components/app/ProgressRing";
 import { StatCard } from "@/components/app/StatCard";
+import { StreakBadges } from "@/components/app/StreakBadges";
 import { BodyTrendChart, DailyIntakeChart, HabitChart } from "@/components/app/TrendCharts";
+import { StrengthMiniTrend } from "@/components/app/StrengthMiniTrend";
+import { WeeklyRecapCard } from "@/components/app/WeeklyRecapCard";
+import { WeightJourneyCard } from "@/components/app/WeightJourneyCard";
 import { TrackingModeToggle } from "@/components/workout/TrackingModeToggle";
 import { WorkoutDashboard } from "@/components/workout/WorkoutDashboard";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { playMilestoneTone, triggerHaptic } from "@/lib/celebrationEffects";
 import { useAllMetrics, useGoals, useMeals, useMetrics, useProfile } from "@/lib/data";
+import { fetchMilestoneCounts, fetchProteinHitDays, runMilestoneCheck } from "@/lib/milestones";
+import { aggregateDailyProtein, computeLoggingStreak, computeProteinStreak } from "@/lib/streaks";
+import { useCurrentBodyWeightKg } from "@/lib/useCurrentBodyWeightKg";
+import { useWorkoutStats } from "@/lib/workouts/hooks";
 import { useTrackingMode } from "@/lib/workouts/useTrackingMode";
 import {
   RANGE_OPTIONS,
@@ -65,9 +78,69 @@ function Dashboard() {
   const rangeMeals = useMeals(range.from, range.to);
   const rangeMetrics = useMetrics(range.from, range.to);
   const allMetrics = useAllMetrics();
+  // workout_sessions (the structured logger) is the source of truth for
+  // workout-day counts and the habit chart's workout bar — shares its cache
+  // with WorkoutDashboard's own call for the same range (same query key), so
+  // this doesn't add a second network request when viewing Workout mode.
+  const rangeWorkoutStats = useWorkoutStats(
+    format(range.from, "yyyy-MM-dd"),
+    format(range.to, "yyyy-MM-dd"),
+  );
+  // A fixed 90-day lookback for streaks — independent of whatever range is
+  // currently selected above, and bounded so it doesn't grow unbounded over
+  // time. Computed once per mount so the query key stays stable (otherwise a
+  // fresh `new Date()` on every render would refetch on every render).
+  const streakWindow = useMemo(() => {
+    const now = new Date();
+    return { from: subDays(now, 90), to: now };
+  }, []);
+  const streakMeals = useMeals(streakWindow.from, streakWindow.to);
+  const dailyProteinTotals = useMemo(
+    () => aggregateDailyProtein(streakMeals.data ?? []),
+    [streakMeals.data],
+  );
+
+  const [milestoneBurstKey, setMilestoneBurstKey] = useState(0);
 
   const goals = goalsQuery.data;
   const loading = goalsQuery.isLoading || rangeMeals.isLoading;
+
+  // Check milestones once the goal target and streak window are both ready.
+  // Best-effort: never blocks or errors the dashboard if it fails.
+  useEffect(() => {
+    if (!goals) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [counts, proteinHitDays] = await Promise.all([
+          fetchMilestoneCounts(),
+          // A wider, dedicated lookback than the 90-day streak window — a
+          // milestone counting toward 20 lifetime hits shouldn't lose credit
+          // for hits that happen to fall outside the streak's short window.
+          fetchProteinHitDays(goals.protein_target_g),
+        ]);
+        const fresh = await runMilestoneCheck({
+          totalMeals: counts.totalMeals,
+          totalWorkouts: counts.totalWorkouts,
+          loggingStreak: computeLoggingStreak(dailyProteinTotals, new Date()),
+          proteinHitDays,
+        });
+        if (cancelled || fresh.length === 0) return;
+        for (const draft of fresh) {
+          toast.success(draft.title, { description: draft.message });
+        }
+        setMilestoneBurstKey((k) => k + 1);
+        playMilestoneTone();
+        triggerHaptic([15, 40, 15]);
+      } catch {
+        // milestones are a nice-to-have — never surface this as an error
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [goals, dailyProteinTotals]);
 
   const rangeTotals = sumMeals(rangeMeals.data);
   const days = Math.max(1, range.days);
@@ -96,12 +169,25 @@ function Dashboard() {
   const latestWaist = waistLogs.length ? Number(waistLogs[waistLogs.length - 1]!.waist_cm) : null;
 
   // Latest logged body weight (daily metrics) with the profile weight as fallback,
-  // used only to estimate workout calories.
-  const profileWeight =
-    profile.data?.start_weight_kg != null ? Number(profile.data.start_weight_kg) : null;
-  const currentBodyWeightKg = latestWeight ?? profileWeight;
+  // used only to estimate workout calories. Shared with the standalone Log
+  // Workout page so both compute it the same way.
+  const currentBodyWeightKg = useCurrentBodyWeightKg();
 
-  const workoutDays = metrics.filter((m) => Number(m.workout_minutes ?? 0) > 0).length;
+  // Union of both sources: a day counts if it has a structured workout_session
+  // (the current source of truth) OR an old manually-typed quick-log entry
+  // (so historical data logged before the structured logger existed still
+  // counts — nothing that used to count stops counting).
+  const workoutMinutesByDate = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const session of rangeWorkoutStats.data?.sessions ?? []) {
+      map.set(session.workout_date, (map.get(session.workout_date) ?? 0) + (session.duration_minutes ?? 0));
+    }
+    return map;
+  }, [rangeWorkoutStats.data]);
+  const workoutDays = new Set([
+    ...metrics.filter((m) => Number(m.workout_minutes ?? 0) > 0).map((m) => m.metric_date),
+    ...workoutMinutesByDate.keys(),
+  ]).size;
   const creatineDays = metrics.filter((m) => m.creatine_taken).length;
   const sleepLogs = metrics.filter((m) => m.sleep_hours != null);
   const avgSleep = sleepLogs.length
@@ -148,11 +234,23 @@ function Dashboard() {
   const remainingKcal = Math.max(0, goals.calorie_target - progress.calories);
   const remainingProtein = Math.max(0, goals.protein_target_g - progress.protein);
 
+  const loggingStreak = computeLoggingStreak(dailyProteinTotals, new Date());
+  const proteinStreak = computeProteinStreak(dailyProteinTotals, goals.protein_target_g, new Date());
+
+  const startWeight =
+    profile.data?.start_weight_kg != null ? Number(profile.data.start_weight_kg) : null;
+
   return (
     <AppShell
       title="Dashboard"
       subtitle={`${range.label} · ${latestWeight ? `${latestWeight} kg` : "no weigh-in yet"} → ${goals.target_weight_kg} kg goal`}
     >
+      {milestoneBurstKey > 0 ? (
+        <div className="pointer-events-none fixed left-1/2 top-24 z-50 -translate-x-1/2" aria-hidden="true">
+          <DayCelebration key={milestoneBurstKey} />
+        </div>
+      ) : null}
+
       <div className="mb-3">
         <TrackingModeToggle mode={trackingMode} onChange={setTrackingMode} />
       </div>
@@ -207,7 +305,20 @@ function Dashboard() {
         />
       ) : (
         <>
-      <section className="panel mt-5 p-4" aria-label="Goal progress">
+      <div className="mt-4 space-y-3">
+        <StreakBadges loggingStreak={loggingStreak} proteinStreak={proteinStreak} />
+        {rangeKey === "today" ? (
+          <DailyCompletionCard
+            date={quickLogDate}
+            calories={progress.calories}
+            calorieTarget={goals.calorie_target}
+            protein={progress.protein}
+            proteinTarget={goals.protein_target_g}
+          />
+        ) : null}
+      </div>
+
+      <section className="panel mt-3 p-4" aria-label="Goal progress">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <p className="text-sm font-semibold">
             {isSingleDay ? `${range.label} · goal progress` : `${range.label} · daily average vs target`}
@@ -275,6 +386,10 @@ function Dashboard() {
         />
       </section>
 
+      <div className="mt-5">
+        <WeeklyRecapCard />
+      </div>
+
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
         <DailyIntakeChart
           meals={rangeMeals.data ?? []}
@@ -282,7 +397,15 @@ function Dashboard() {
           proteinTarget={goals.protein_target_g}
         />
         <BodyTrendChart metrics={allMetrics.data ?? []} />
-        <HabitChart metrics={metrics} />
+        {startWeight != null && latestWeight != null ? (
+          <WeightJourneyCard
+            startWeight={startWeight}
+            currentWeight={latestWeight}
+            goalWeight={goals.target_weight_kg}
+          />
+        ) : null}
+        <HabitChart metrics={metrics} workoutMinutesByDate={workoutMinutesByDate} />
+        <StrengthMiniTrend />
         <MetricsQuickLog date={quickLogDate} metric={quickLogMetric} goals={goals} />
       </div>
 

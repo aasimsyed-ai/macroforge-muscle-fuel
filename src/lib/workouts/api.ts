@@ -52,6 +52,27 @@ export async function fetchExerciseCatalog(): Promise<ExerciseCatalogItem[]> {
 
 /* --------------------------------- sessions -------------------------------- */
 
+export interface SessionVolumePoint {
+  date: string;
+  volume: number;
+}
+
+/** The last few sessions' total volume, oldest first — a compact "is load trending up" signal. */
+export async function fetchRecentSessionVolumes(limit = 8): Promise<SessionVolumePoint[]> {
+  const user = await requireUser();
+  const { data, error } = await supabase
+    .from("workout_sessions")
+    .select("workout_date, total_volume")
+    .eq("user_id", user.id)
+    .order("workout_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? [])
+    .map((row) => ({ date: row.workout_date, volume: Number(row.total_volume) }))
+    .reverse();
+}
+
 export async function fetchWorkoutSessions(fromDate: string, toDate: string): Promise<SessionRow[]> {
   const user = await requireUser();
   const { data, error } = await supabase
@@ -298,19 +319,32 @@ export function sessionDetailToDraft(detail: WorkoutSessionDetail): WorkoutSessi
   };
 }
 
+export interface ReplaceWorkoutResult {
+  session: WorkoutSessionRecord;
+  /** False if the original session could not be removed — the caller must tell the user. */
+  oldSessionRemoved: boolean;
+}
+
 /**
  * Edit a saved workout. The RPC only ever appends, so an edit is implemented as
  * create-the-replacement-then-remove-the-original — in that order, so a failure
- * never loses data (worst case is a harmless duplicate the user can delete).
+ * never loses data. If the removal step fails, this reports it via
+ * `oldSessionRemoved: false` instead of swallowing it, so the caller can warn
+ * the user about the leftover duplicate rather than hiding it.
  */
 export async function replaceWorkoutSession(
   oldId: string,
   draft: WorkoutSessionDraft,
   bodyWeightKg: number | null,
-): Promise<WorkoutSessionRecord> {
-  const next = await createWorkoutSession(draft, bodyWeightKg);
-  await deleteWorkoutSession(oldId).catch(() => undefined);
-  return next;
+): Promise<ReplaceWorkoutResult> {
+  const session = await createWorkoutSession(draft, bodyWeightKg);
+  let oldSessionRemoved = true;
+  try {
+    await deleteWorkoutSession(oldId);
+  } catch {
+    oldSessionRemoved = false;
+  }
+  return { session, oldSessionRemoved };
 }
 
 export interface WorkoutRangeStats {

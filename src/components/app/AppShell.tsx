@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { BarChart3, CirclePlus, Flame, LogOut, Settings } from "lucide-react";
+import { BarChart3, CirclePlus, Dumbbell, Flame, LogOut, Settings } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { NotificationBell } from "@/components/workout/NotificationBell";
@@ -11,6 +11,7 @@ import { TRIAL_DAYS, guestActive, guestDayNumber } from "@/lib/guest";
 const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { to: "/add-meal", label: "Add Meal", icon: CirclePlus },
+  { to: "/log-workout", label: "Log Workout", icon: Dumbbell },
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
 

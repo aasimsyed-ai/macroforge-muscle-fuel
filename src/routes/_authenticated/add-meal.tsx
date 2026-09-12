@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { format } from "date-fns";
-import { Camera, RotateCcw, Sparkles, X } from "lucide-react";
+import { Camera, Check, RotateCcw, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -31,7 +31,9 @@ import {
   SERVING_SUGGESTIONS,
   type MacroEstimate,
 } from "@/lib/food-estimate";
+import { playSaveTone, triggerHaptic } from "@/lib/celebrationEffects";
 import { MEAL_CATEGORIES } from "@/lib/nutrition";
+import { useSaveFeedback } from "@/lib/useSaveFeedback";
 
 const searchSchema = z.object({ edit: z.string().optional() });
 
@@ -90,6 +92,7 @@ function AddMeal() {
   const editingMeal = useMeal(editId ?? null);
   const recent = useRecentMeals();
   const fileInput = useRef<HTMLInputElement>(null);
+  const [justSaved, celebrate] = useSaveFeedback();
 
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
@@ -299,9 +302,14 @@ function AddMeal() {
         toast.success("Meal updated");
       } else {
         await create.mutateAsync({ ...fields, photo });
-        toast.success("Meal saved");
+        const protein = Math.round(fields.protein_g);
+        toast.success(protein > 0 ? `Meal logged ✓ · +${protein}g protein` : "Meal logged ✓");
       }
-      navigate({ to: "/dashboard" });
+      celebrate();
+      playSaveTone();
+      triggerHaptic();
+      // Let the checkmark actually be seen before the page changes.
+      window.setTimeout(() => navigate({ to: "/dashboard" }), 550);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save the meal");
     }
@@ -522,8 +530,22 @@ function AddMeal() {
                 <RotateCcw className="size-4" /> Cancel
               </Button>
             ) : null}
-            <Button type="submit" className="w-full" disabled={saving}>
-              {saving ? "Saving…" : isEdit ? "Update meal" : "Save meal"}
+            <Button
+              type="submit"
+              className={`w-full transition-transform ${justSaved ? "scale-[1.03]" : ""}`}
+              disabled={saving || justSaved}
+            >
+              {justSaved ? (
+                <>
+                  <Check className="size-4" /> Saved!
+                </>
+              ) : saving ? (
+                "Saving…"
+              ) : isEdit ? (
+                "Update meal"
+              ) : (
+                "Save meal"
+              )}
             </Button>
           </div>
         </section>

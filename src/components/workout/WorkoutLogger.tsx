@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { playSaveTone, triggerHaptic } from "@/lib/celebrationEffects";
 import * as workoutApi from "@/lib/workouts/api";
 import { calculateSessionVolume, calculateWorkoutCalories } from "@/lib/workouts/calculations";
 import { INTENSITIES } from "@/lib/workouts/constants";
@@ -176,15 +177,22 @@ export function WorkoutLogger({
     submittingRef.current = true;
     try {
       if (isEditing && initialData) {
-        await replace.mutateAsync({ oldId: initialData.sessionId, draft, bodyWeightKg });
-        toast.success("Workout updated");
+        const result = await replace.mutateAsync({ oldId: initialData.sessionId, draft, bodyWeightKg });
+        if (result.oldSessionRemoved) {
+          toast.success("Workout updated");
+        } else {
+          toast.warning("Workout updated, but the old entry couldn't be removed. Please check Workout History.");
+        }
       } else {
         await create.mutateAsync({ draft, bodyWeightKg });
-        toast.success("Workout saved");
+        const moved = Math.round(totalVolume);
+        toast.success(moved > 0 ? `Workout logged ✓ · ${moved.toLocaleString()} kg moved` : "Workout logged ✓");
         setDraft(initialDraft());
         setDraftVersion((v) => v + 1);
         phaseTouched.current = false;
       }
+      playSaveTone();
+      triggerHaptic();
       onSaved?.();
     } catch (error) {
       toast.error(

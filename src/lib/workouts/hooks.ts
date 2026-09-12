@@ -14,9 +14,10 @@ export function useExerciseCatalog() {
   });
 }
 
-export function useWorkoutStats(fromDate: string, toDate: string) {
+export function useWorkoutStats(fromDate: string, toDate: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: [...WORKOUT_KEY, "stats", fromDate, toDate],
+    enabled: options?.enabled ?? true,
     queryFn: () => api.fetchWorkoutStats(fromDate, toDate),
   });
 }
@@ -50,6 +51,14 @@ export function useReplaceWorkout() {
       qc.invalidateQueries({ queryKey: WORKOUT_KEY });
       qc.invalidateQueries({ queryKey: NOTIFICATION_KEY });
     },
+  });
+}
+
+export function useRecentSessionVolumes(limit = 8, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: [...WORKOUT_KEY, "recent-volumes", limit],
+    enabled: options?.enabled ?? true,
+    queryFn: () => api.fetchRecentSessionVolumes(limit),
   });
 }
 

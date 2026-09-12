@@ -25,9 +25,9 @@ export const Route = createFileRoute("/")({
 
 const FEATURES = [
   { icon: Target, title: "Targets that fit you", body: "Configurable calorie and protein goals — starting at 2,550 kcal and 130 g protein." },
-  { icon: Camera, title: "Photo-assisted meal logs", body: "Attach a meal photo, get an approximate macro estimate, then correct it before saving." },
+  { icon: Camera, title: "Photo-assisted meal logs", body: "Name what you ate — attach a photo too — and get an approximate macro estimate you can correct before saving." },
   { icon: LineChart, title: "Real trends", body: "Today through last month plus custom ranges: weight, waist, sleep and macro trends." },
-  { icon: Dumbbell, title: "Habit consistency", body: "Workout minutes, water, sleep and creatine adherence tracked day by day." },
+  { icon: Dumbbell, title: "Habit consistency", body: "Workout minutes, water, sleep and creatine adherence tracked day by day. Workout logging needs a free account; food tracking works right away." },
 ];
 
 function Landing() {
@@ -53,7 +53,7 @@ function Landing() {
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <Button size="lg" onClick={startTrial}>
-            Start tracking — no sign-up
+            Start tracking food — no sign-up
           </Button>
           <Button asChild size="lg" variant="secondary">
             <Link to="/auth" search={{ mode: "signin" }}>
@@ -62,7 +62,9 @@ function Landing() {
           </Button>
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
-          Try it free for 3 days with nothing to fill in. Create an account any time to save your data across devices.
+          Try food tracking free for 3 days with nothing to fill in — no account needed. Workout tracking
+          needs a free account so your training history follows you across devices; create one any time
+          and everything you logged as a guest is kept.
         </p>
 
         <div className="mt-14 grid gap-4 sm:grid-cols-2">

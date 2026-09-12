@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "@tanstack/react-router";
-import { Dumbbell, Plus, Settings2 } from "lucide-react";
+import { Plus, Settings2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,6 +12,7 @@ import { NotificationPreferences } from "./NotificationPreferences";
 import { ProgressionSuggestion } from "./ProgressionSuggestion";
 import { WearableConnectionCard } from "./WearableConnectionCard";
 import { WhatsAppSettings } from "./WhatsAppSettings";
+import { WorkoutAccountRequired } from "./WorkoutAccountRequired";
 import { WorkoutHistory } from "./WorkoutHistory";
 import { WorkoutLogger } from "./WorkoutLogger";
 import { WorkoutSummaryCards } from "./WorkoutSummaryCards";
@@ -40,21 +40,7 @@ export function WorkoutDashboard({
   }, [isGuest, prefsData]);
 
   if (isGuest) {
-    return (
-      <div className="panel mt-5 p-6 text-center">
-        <Dumbbell className="mx-auto size-6 text-primary" aria-hidden="true" />
-        <p className="mt-2 text-sm font-semibold">Workout tracking needs an account</p>
-        <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">
-          Workouts sync to your account so your training history and progression insights follow you
-          across devices. Food tracking stays available on this device.
-        </p>
-        <Button asChild size="sm" className="mt-3">
-          <Link to="/auth" search={{ mode: "signup" }}>
-            Create a free account
-          </Link>
-        </Button>
-      </div>
-    );
+    return <WorkoutAccountRequired />;
   }
 
   return (
@@ -69,7 +55,7 @@ export function WorkoutDashboard({
           </div>
           {!logging ? (
             <Button type="button" size="sm" onClick={() => setLogging(true)}>
-              <Plus className="size-4" /> New workout
+              <Plus className="size-4" /> Log workout
             </Button>
           ) : null}
         </div>

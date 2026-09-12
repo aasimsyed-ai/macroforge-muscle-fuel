@@ -188,6 +188,9 @@ export type Database = {
           height_cm: number | null
           id: string
           onboarded: boolean
+          push_notifications_enabled: boolean
+          push_quiet_hours_end: string | null
+          push_quiet_hours_start: string | null
           sex: string | null
           start_weight_kg: number | null
           updated_at: string
@@ -200,6 +203,9 @@ export type Database = {
           height_cm?: number | null
           id: string
           onboarded?: boolean
+          push_notifications_enabled?: boolean
+          push_quiet_hours_end?: string | null
+          push_quiet_hours_start?: string | null
           sex?: string | null
           start_weight_kg?: number | null
           updated_at?: string
@@ -212,9 +218,45 @@ export type Database = {
           height_cm?: number | null
           id?: string
           onboarded?: boolean
+          push_notifications_enabled?: boolean
+          push_quiet_hours_end?: string | null
+          push_quiet_hours_start?: string | null
           sex?: string | null
           start_weight_kg?: number | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth_key: string
+          created_at: string
+          endpoint: string
+          id: string
+          last_used_at: string | null
+          p256dh: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          auth_key: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          last_used_at?: string | null
+          p256dh: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          auth_key?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          last_used_at?: string | null
+          p256dh?: string
+          user_agent?: string | null
+          user_id?: string
         }
         Relationships: []
       }
