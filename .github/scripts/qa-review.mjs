@@ -32,10 +32,7 @@ function outcomeLine(name, outcome) {
 }
 
 function buildPrompt() {
-  const promptTemplate = readFileSync(
-    new URL("../qa-reviewer-prompt.md", import.meta.url),
-    "utf8",
-  );
+  const promptTemplate = readFileSync(new URL("../qa-reviewer-prompt.md", import.meta.url), "utf8");
 
   const meta = [
     `PR #${process.env.PR_NUMBER}: ${process.env.PR_TITLE ?? "(no title)"}`,
