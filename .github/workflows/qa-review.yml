@@ -39,10 +39,26 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Lint
+      - name: Compute PR diff (diff only — not the whole repo)
+        run: |
+          git fetch origin "${{ github.event.pull_request.base.ref }}" --depth=50
+          git diff --unified=3 "origin/${{ github.event.pull_request.base.ref }}...HEAD" > pr.diff || true
+          git diff --name-status "origin/${{ github.event.pull_request.base.ref }}...HEAD" > changed-files.txt || true
+          git diff --name-only --diff-filter=ACMR "origin/${{ github.event.pull_request.base.ref }}...HEAD" \
+            -- '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.cjs' > changed-lintable-files.txt || true
+
+      # Scoped to the files this PR actually changed, not the whole repo —
+      # this project's pre-existing repo-wide lint debt (1000+ errors) would
+      # otherwise drown out the one or two lines that matter for THIS diff.
+      - name: Lint (changed files only)
         id: lint
         continue-on-error: true
-        run: bun run lint 2>&1 | tee lint-output.txt
+        run: |
+          if [ -s changed-lintable-files.txt ]; then
+            bunx eslint $(cat changed-lintable-files.txt) 2>&1 | tee lint-output.txt
+          else
+            echo "No lintable files changed in this diff — nothing to lint." | tee lint-output.txt
+          fi
 
       - name: Typecheck
         id: typecheck
@@ -58,12 +74,6 @@ jobs:
         id: test
         continue-on-error: true
         run: bun run test 2>&1 | tee test-output.txt
-
-      - name: Compute PR diff (diff only — not the whole repo)
-        run: |
-          git fetch origin "${{ github.event.pull_request.base.ref }}" --depth=50
-          git diff --unified=3 "origin/${{ github.event.pull_request.base.ref }}...HEAD" > pr.diff || true
-          git diff --name-status "origin/${{ github.event.pull_request.base.ref }}...HEAD" > changed-files.txt || true
 
       # Safety valve for an unattended repeat-fix loop: if this PR has
       # already collected 8 QA verdicts without shipping, stop spending API

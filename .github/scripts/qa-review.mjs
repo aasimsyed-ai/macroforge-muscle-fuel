@@ -26,6 +26,22 @@ function readCapped(path, cap, fallback = "(not available)") {
   return `${text.slice(0, cap)}\n\n[... truncated, ${text.length - cap} more characters ...]`;
 }
 
+/**
+ * Same as readCapped, but keeps the END of the text instead of the start.
+ * Tool output (eslint/tsc/vitest) prints its pass/fail summary and error
+ * count as the LAST lines — truncating from the front (as readCapped does,
+ * appropriate for a diff) would cut exactly the line that says how many
+ * errors there were, and a model could report a truncated wall of errors
+ * as "pass" for lack of ever seeing the final tally.
+ */
+function readCappedTail(path, cap, fallback = "(not available)") {
+  if (!existsSync(path)) return fallback;
+  const text = readFileSync(path, "utf8").trim();
+  if (!text) return "(empty)";
+  if (text.length <= cap) return text;
+  return `[... truncated, ${text.length - cap} earlier characters ...]\n\n${text.slice(-cap)}`;
+}
+
 function outcomeLine(name, outcome) {
   const label = outcome === "success" ? "PASS" : outcome === "skipped" ? "SKIPPED" : "FAIL";
   return `- ${name}: ${label}`;
@@ -39,7 +55,7 @@ function buildPrompt() {
     `Base branch: ${process.env.PR_BASE}`,
     `Head commit: ${process.env.PR_HEAD_SHA}`,
     "",
-    "Check outcomes (from CI, already run — trust these over re-deriving them):",
+    "AUTHORITATIVE check outcomes (from CI, already run). Copy these PASS/FAIL values verbatim into your 'Build/lint/test results' section — do not re-derive them from the log excerpts below, which may be truncated:",
     outcomeLine("lint", process.env.LINT_EXIT),
     outcomeLine("typecheck", process.env.TYPECHECK_EXIT),
     outcomeLine("build", process.env.BUILD_EXIT),
@@ -48,10 +64,12 @@ function buildPrompt() {
 
   const changedFiles = readCapped("changed-files.txt", 4_000);
   const diff = readCapped("pr.diff", DIFF_CHAR_CAP);
-  const lintOut = readCapped("lint-output.txt", LOG_CHAR_CAP);
-  const typecheckOut = readCapped("typecheck-output.txt", LOG_CHAR_CAP);
-  const buildOut = readCapped("build-output.txt", LOG_CHAR_CAP);
-  const testOut = readCapped("test-output.txt", LOG_CHAR_CAP);
+  // Tail-truncated: the pass/fail summary and error count are the last
+  // lines of eslint/tsc/vitest output, not the first.
+  const lintOut = readCappedTail("lint-output.txt", LOG_CHAR_CAP);
+  const typecheckOut = readCappedTail("typecheck-output.txt", LOG_CHAR_CAP);
+  const buildOut = readCappedTail("build-output.txt", LOG_CHAR_CAP);
+  const testOut = readCappedTail("test-output.txt", LOG_CHAR_CAP);
 
   return `${promptTemplate}
 

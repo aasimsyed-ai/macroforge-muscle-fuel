@@ -47,7 +47,7 @@ or
 Then:
 
 ### Build/lint/test results
-One line per check (lint / typecheck / build / test): pass or fail, plus the key error output if it failed.
+One line per check (lint / typecheck / build / test). The PASS/FAIL value for each line **must be copied verbatim from the "Check outcomes" block above** — that block is the authoritative CI result. Do not re-derive pass/fail from reading the (possibly truncated) log excerpt yourself; the excerpt is only there to help you quote the *relevant* error lines once you already know a check failed. If a check's outcome says FAIL, quote the specific error line(s) from its output that are relevant to this diff (or say "pre-existing, unrelated to this diff" if the log shows the failure is in a file this diff doesn't touch) — never report FAIL as pass because the excerpt you were shown didn't happen to include an error.
 
 ### Findings
 For each finding: severity (Critical / Important / Minor / Cosmetic), file/location, what's wrong, why it matters, a suggested fix. Omit this section entirely if there are none.
