@@ -192,8 +192,10 @@ function ItemRow({
             aria-label="Food name"
             className="h-6 w-full border-none bg-transparent px-1 font-medium shadow-none focus-visible:ring-1"
           />
-          {item.grams != null ? (
-            <span className="block px-1 text-[10px] text-muted-foreground">~{item.grams} g</span>
+          {item.grams != null || item.exact ? (
+            <span className="block px-1 text-[10px] text-muted-foreground">
+              {item.exact ? "from label" : `~${item.grams} g`}
+            </span>
           ) : null}
         </div>
         <Input

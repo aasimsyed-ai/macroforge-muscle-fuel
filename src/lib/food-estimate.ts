@@ -26,6 +26,8 @@ export type EstimatedItem = {
   carbs: number;
   fat: number;
   recognised: boolean;
+  /** True for values read from a real product's own label (e.g. a barcode scan) rather than approximated. */
+  exact?: boolean;
 };
 
 export type MacroEstimate = {

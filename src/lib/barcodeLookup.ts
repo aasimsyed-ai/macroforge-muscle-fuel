@@ -78,6 +78,7 @@ export async function lookupBarcodeProduct(code: string): Promise<EstimatedItem 
       carbs: round1(carbs),
       fat: round1(fat),
       recognised: true,
+      exact: true,
     };
   } catch {
     return null;
