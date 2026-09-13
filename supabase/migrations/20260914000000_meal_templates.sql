@@ -1,8 +1,9 @@
 -- Saved Meals / Recipes: user-curated, reusable meal templates. Distinct
 -- from `meals` (a logged instance) — this is a template a user explicitly
 -- saves once and reapplies many times. One row per named template; saving
--- again under the same (case-insensitive) name updates it rather than
--- creating a duplicate.
+-- again under the exact same name (case-sensitive) updates it rather than
+-- creating a duplicate — matches the client's upsert (`onConflict:
+-- "user_id,name"`) and guest-mode dedup, both exact-string comparisons.
 CREATE TABLE public.meal_templates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users ON DELETE CASCADE,

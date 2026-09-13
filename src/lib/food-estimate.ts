@@ -76,19 +76,77 @@ type Ref = {
 };
 
 const REFERENCE: Ref[] = [
-  { keys: ["chicken breast", "grilled chicken", "chicken"], name: "Chicken breast", kcal: 165, p: 31, c: 0, f: 3.6, serve: 150 },
+  {
+    keys: ["chicken breast", "grilled chicken", "chicken"],
+    name: "Chicken breast",
+    kcal: 165,
+    p: 31,
+    c: 0,
+    f: 3.6,
+    serve: 150,
+  },
   { keys: ["egg white"], name: "Egg white", kcal: 52, p: 11, c: 0.7, f: 0.2, serve: 66 },
-  { keys: ["boiled egg", "egg", "eggs", "omelette", "omelet", "anda"], name: "Whole egg", kcal: 143, p: 13, c: 1.1, f: 9.5, serve: 100 },
+  {
+    keys: ["boiled egg", "egg", "eggs", "omelette", "omelet", "anda"],
+    name: "Whole egg",
+    kcal: 143,
+    p: 13,
+    c: 1.1,
+    f: 9.5,
+    serve: 100,
+  },
   { keys: ["paneer"], name: "Paneer", kcal: 296, p: 20, c: 3.4, f: 22, serve: 60 },
   { keys: ["tofu"], name: "Tofu", kcal: 144, p: 15, c: 3, f: 8, serve: 100 },
-  { keys: ["whey", "protein shake", "protein powder", "mass gainer"], name: "Whey protein", kcal: 400, p: 78, c: 8, f: 6, serve: 30, dry: true },
-  { keys: ["greek yogurt", "yoghurt", "yogurt", "curd", "dahi"], name: "Greek yogurt", kcal: 97, p: 9, c: 4, f: 5, serve: 150 },
+  {
+    keys: ["whey", "protein shake", "protein powder", "mass gainer"],
+    name: "Whey protein",
+    kcal: 400,
+    p: 78,
+    c: 8,
+    f: 6,
+    serve: 30,
+    dry: true,
+  },
+  {
+    keys: ["greek yogurt", "yoghurt", "yogurt", "curd", "dahi"],
+    name: "Greek yogurt",
+    kcal: 97,
+    p: 9,
+    c: 4,
+    f: 5,
+    serve: 150,
+  },
   { keys: ["milk", "doodh"], name: "Milk", kcal: 62, p: 3.3, c: 4.8, f: 3.3, serve: 200 },
-  { keys: ["rice", "chawal", "biryani", "pulao", "khichdi", "fried rice"], name: "Cooked rice", kcal: 130, p: 2.7, c: 28, f: 0.3, serve: 180 },
-  { keys: ["roti", "chapati", "phulka"], name: "Roti / chapati", kcal: 297, p: 9, c: 58, f: 3.7, serve: 45 },
+  {
+    keys: ["rice", "chawal", "biryani", "pulao", "khichdi", "fried rice"],
+    name: "Cooked rice",
+    kcal: 130,
+    p: 2.7,
+    c: 28,
+    f: 0.3,
+    serve: 180,
+  },
+  {
+    keys: ["roti", "chapati", "phulka"],
+    name: "Roti / chapati",
+    kcal: 297,
+    p: 9,
+    c: 58,
+    f: 3.7,
+    serve: 45,
+  },
   { keys: ["bread", "toast"], name: "Bread", kcal: 265, p: 9, c: 49, f: 3.2, serve: 60 },
   {
-    keys: ["protein oats", "protein muesli", "flavoured oats", "flavored oats", "chocolate oats", "yogabar", "yoga bar", "oats shake"],
+    keys: [
+      "protein oats",
+      "protein muesli",
+      "flavoured oats",
+      "flavored oats",
+      "chocolate oats",
+      "yogabar",
+      "yoga bar",
+      "oats shake",
+    ],
     name: "Flavoured protein oats with milk",
     kcal: 120,
     p: 6,
@@ -96,42 +154,205 @@ const REFERENCE: Ref[] = [
     f: 3.5,
     serve: 250,
   },
-  { keys: ["rolled oats", "raw oats", "dry oats", "oats dry", "overnight oats"], name: "Rolled oats", kcal: 379, p: 13, c: 67, f: 6.5, serve: 40, dry: true },
-  { keys: ["granola", "muesli"], name: "Granola / muesli", kcal: 450, p: 10, c: 64, f: 15, serve: 45, dry: true },
-  { keys: ["oats", "oatmeal", "porridge", "dalia", "daliya"], name: "Oats porridge, cooked", kcal: 95, p: 3.6, c: 15, f: 2.4, serve: 250 },
-  { keys: ["cornflakes", "corn flakes", "cereal"], name: "Breakfast cereal", kcal: 378, p: 7, c: 84, f: 1, serve: 40, dry: true },
-  { keys: ["pasta", "noodles", "macaroni", "maggi"], name: "Cooked pasta / noodles", kcal: 158, p: 6, c: 31, f: 0.9, serve: 180 },
+  {
+    keys: ["rolled oats", "raw oats", "dry oats", "oats dry", "overnight oats"],
+    name: "Rolled oats",
+    kcal: 379,
+    p: 13,
+    c: 67,
+    f: 6.5,
+    serve: 40,
+    dry: true,
+  },
+  {
+    keys: ["granola", "muesli"],
+    name: "Granola / muesli",
+    kcal: 450,
+    p: 10,
+    c: 64,
+    f: 15,
+    serve: 45,
+    dry: true,
+  },
+  {
+    keys: ["oats", "oatmeal", "porridge", "dalia", "daliya"],
+    name: "Oats porridge, cooked",
+    kcal: 95,
+    p: 3.6,
+    c: 15,
+    f: 2.4,
+    serve: 250,
+  },
+  {
+    keys: ["cornflakes", "corn flakes", "cereal"],
+    name: "Breakfast cereal",
+    kcal: 378,
+    p: 7,
+    c: 84,
+    f: 1,
+    serve: 40,
+    dry: true,
+  },
+  {
+    keys: ["pasta", "noodles", "macaroni", "maggi"],
+    name: "Cooked pasta / noodles",
+    kcal: 158,
+    p: 6,
+    c: 31,
+    f: 0.9,
+    serve: 180,
+  },
   { keys: ["potato", "aloo"], name: "Potato", kcal: 87, p: 2, c: 20, f: 0.1, serve: 150 },
-  { keys: ["sweet potato", "shakarkandi"], name: "Sweet potato", kcal: 90, p: 2, c: 21, f: 0.2, serve: 150 },
-  { keys: ["dal", "lentil", "dhal", "rajma", "chana", "chickpea", "chhole", "chole", "sambar"], name: "Cooked lentils / beans", kcal: 116, p: 9, c: 20, f: 0.4, serve: 150 },
+  {
+    keys: ["sweet potato", "shakarkandi"],
+    name: "Sweet potato",
+    kcal: 90,
+    p: 2,
+    c: 21,
+    f: 0.2,
+    serve: 150,
+  },
+  {
+    keys: ["dal", "lentil", "dhal", "rajma", "chana", "chickpea", "chhole", "chole", "sambar"],
+    name: "Cooked lentils / beans",
+    kcal: 116,
+    p: 9,
+    c: 20,
+    f: 0.4,
+    serve: 150,
+  },
   { keys: ["salmon"], name: "Salmon", kcal: 208, p: 20, c: 0, f: 13, serve: 150 },
   { keys: ["tuna"], name: "Tuna", kcal: 132, p: 28, c: 0, f: 1, serve: 100 },
   { keys: ["fish", "machli"], name: "White fish", kcal: 110, p: 23, c: 0, f: 1.5, serve: 150 },
-  { keys: ["mutton", "lamb", "goat", "keema"], name: "Mutton", kcal: 258, p: 25, c: 0, f: 17, serve: 130 },
+  {
+    keys: ["mutton", "lamb", "goat", "keema"],
+    name: "Mutton",
+    kcal: 258,
+    p: 25,
+    c: 0,
+    f: 17,
+    serve: 130,
+  },
   { keys: ["beef", "steak"], name: "Beef", kcal: 250, p: 26, c: 0, f: 15, serve: 130 },
   { keys: ["peanut butter"], name: "Peanut butter", kcal: 588, p: 25, c: 20, f: 50, serve: 20 },
   { keys: ["peanut", "groundnut"], name: "Peanuts", kcal: 567, p: 26, c: 16, f: 49, serve: 30 },
-  { keys: ["almond", "badam", "cashew", "walnut", "nuts", "trail mix"], name: "Mixed nuts", kcal: 600, p: 20, c: 20, f: 50, serve: 30 },
+  {
+    keys: ["almond", "badam", "cashew", "walnut", "nuts", "trail mix"],
+    name: "Mixed nuts",
+    kcal: 600,
+    p: 20,
+    c: 20,
+    f: 50,
+    serve: 30,
+  },
   { keys: ["banana", "kela"], name: "Banana", kcal: 89, p: 1.1, c: 23, f: 0.3, serve: 120 },
   { keys: ["apple"], name: "Apple", kcal: 52, p: 0.3, c: 14, f: 0.2, serve: 180 },
   { keys: ["mango", "aam"], name: "Mango", kcal: 60, p: 0.8, c: 15, f: 0.4, serve: 200 },
-  { keys: ["pomegr", "anaar", "anar"], name: "Pomegranate", kcal: 83, p: 1.7, c: 19, f: 1.2, serve: 120 },
-  { keys: ["orange", "mosambi", "sweet lime"], name: "Orange", kcal: 47, p: 0.9, c: 12, f: 0.1, serve: 130 },
-  { keys: ["berries", "strawberr", "blueberr"], name: "Berries", kcal: 45, p: 0.9, c: 10, f: 0.3, serve: 100 },
-  { keys: ["beetroot", "beet root", "bit root", "chukandar"], name: "Beetroot", kcal: 43, p: 1.6, c: 10, f: 0.2, serve: 100 },
+  {
+    keys: ["pomegr", "anaar", "anar"],
+    name: "Pomegranate",
+    kcal: 83,
+    p: 1.7,
+    c: 19,
+    f: 1.2,
+    serve: 120,
+  },
+  {
+    keys: ["orange", "mosambi", "sweet lime"],
+    name: "Orange",
+    kcal: 47,
+    p: 0.9,
+    c: 12,
+    f: 0.1,
+    serve: 130,
+  },
+  {
+    keys: ["berries", "strawberr", "blueberr"],
+    name: "Berries",
+    kcal: 45,
+    p: 0.9,
+    c: 10,
+    f: 0.3,
+    serve: 100,
+  },
+  {
+    keys: ["beetroot", "beet root", "bit root", "chukandar"],
+    name: "Beetroot",
+    kcal: 43,
+    p: 1.6,
+    c: 10,
+    f: 0.2,
+    serve: 100,
+  },
   { keys: ["juice"], name: "Fruit / vegetable juice", kcal: 48, p: 0.5, c: 11, f: 0.1, serve: 200 },
-  { keys: ["salad", "vegetable", "veggies", "sabzi", "bhaji", "broccoli", "spinach", "palak"], name: "Vegetables", kcal: 45, p: 2.5, c: 7, f: 0.5, serve: 100 },
+  {
+    keys: ["salad", "vegetable", "veggies", "sabzi", "bhaji", "broccoli", "spinach", "palak"],
+    name: "Vegetables",
+    kcal: 45,
+    p: 2.5,
+    c: 7,
+    f: 0.5,
+    serve: 100,
+  },
   { keys: ["paratha"], name: "Paratha", kcal: 330, p: 7, c: 45, f: 13, serve: 90 },
-  { keys: ["dosa", "idli", "uttapam"], name: "Dosa / idli", kcal: 180, p: 5, c: 32, f: 3.5, serve: 120 },
+  {
+    keys: ["dosa", "idli", "uttapam"],
+    name: "Dosa / idli",
+    kcal: 180,
+    p: 5,
+    c: 32,
+    f: 3.5,
+    serve: 120,
+  },
   { keys: ["poha"], name: "Poha", kcal: 130, p: 2.5, c: 26, f: 2.5, serve: 200 },
   { keys: ["upma"], name: "Upma", kcal: 150, p: 3.5, c: 24, f: 4.5, serve: 200 },
   { keys: ["pizza"], name: "Pizza", kcal: 266, p: 11, c: 33, f: 10, serve: 250 },
-  { keys: ["burger", "vada pav", "sandwich"], name: "Burger / sandwich", kcal: 260, p: 12, c: 30, f: 11, serve: 200 },
-  { keys: ["fries", "chips", "wafers"], name: "Fries / chips", kcal: 312, p: 3.4, c: 41, f: 15, serve: 100 },
-  { keys: ["ice cream", "dessert", "cake", "sweet", "mithai", "gulab jamun", "halwa"], name: "Dessert", kcal: 350, p: 5, c: 45, f: 17, serve: 100 },
+  {
+    keys: ["burger", "vada pav", "sandwich"],
+    name: "Burger / sandwich",
+    kcal: 260,
+    p: 12,
+    c: 30,
+    f: 11,
+    serve: 200,
+  },
+  {
+    keys: ["fries", "chips", "wafers"],
+    name: "Fries / chips",
+    kcal: 312,
+    p: 3.4,
+    c: 41,
+    f: 15,
+    serve: 100,
+  },
+  {
+    keys: ["ice cream", "dessert", "cake", "sweet", "mithai", "gulab jamun", "halwa"],
+    name: "Dessert",
+    kcal: 350,
+    p: 5,
+    c: 45,
+    f: 17,
+    serve: 100,
+  },
   { keys: ["cheese"], name: "Cheese", kcal: 402, p: 25, c: 1.3, f: 33, serve: 20 },
-  { keys: ["butter", "ghee", "oil"], name: "Butter / ghee / oil", kcal: 810, p: 0.5, c: 0.5, f: 90, serve: 10 },
-  { keys: ["coffee", "tea", "chai"], name: "Tea / coffee with milk", kcal: 40, p: 1.5, c: 5, f: 1.4, serve: 200 },
+  {
+    keys: ["butter", "ghee", "oil"],
+    name: "Butter / ghee / oil",
+    kcal: 810,
+    p: 0.5,
+    c: 0.5,
+    f: 90,
+    serve: 10,
+  },
+  {
+    keys: ["coffee", "tea", "chai"],
+    name: "Tea / coffee with milk",
+    kcal: 40,
+    p: 1.5,
+    c: 5,
+    f: 1.4,
+    serve: 200,
+  },
   { keys: ["soup"], name: "Soup", kcal: 55, p: 3, c: 7, f: 1.5, serve: 250 },
   { keys: ["shake", "smoothie"], name: "Smoothie", kcal: 90, p: 3, c: 15, f: 2, serve: 300 },
 ];
@@ -229,7 +450,9 @@ function estimateItem(phrase: string, sharedGrams: number | null, isOnlyItem: bo
   }
 
   // Milk: added for a dry item served in a bowl, or when the wording says so.
-  const saysMilk = /\b(with milk|in milk|cooked in milk|made with milk|and milk|doodh)\b/.test(text);
+  const saysMilk = /\b(with milk|in milk|cooked in milk|made with milk|and milk|doodh)\b/.test(
+    text,
+  );
   const alreadyMilky = refs.some((r) => /milk/.test(r.name));
   if (!alreadyMilky && (allDry || saysMilk)) {
     const milkGrams = allDry ? 200 : MILK_ADDON.ml;
@@ -260,7 +483,9 @@ export const referenceAnalyzer: FoodAnalyzer = {
 
     const items = splitItems(text);
     const isSingle = items.length <= 1;
-    const results = items.map((phrase) => estimateItem(phrase, grams && grams > 0 ? grams : null, isSingle));
+    const results = items.map((phrase) =>
+      estimateItem(phrase, grams && grams > 0 ? grams : null, isSingle),
+    );
 
     // Built from the already-rounded per-item numbers (not a separately
     // rounded raw sum) so the itemized list always adds up to exactly the
@@ -301,7 +526,8 @@ export const referenceAnalyzer: FoodAnalyzer = {
     } else {
       noteParts.push("No exact food match — rough placeholder");
     }
-    if (unknown.length) noteParts.push(`couldn't recognise "${unknown.join('", "')}" — check those`);
+    if (unknown.length)
+      noteParts.push(`couldn't recognise "${unknown.join('", "')}" — check those`);
     noteParts.push("every number stays editable");
 
     return {
@@ -334,9 +560,13 @@ export function hasVisionAnalyzer(): boolean {
 }
 
 const SUPABASE_URL: string =
-  (typeof import.meta !== "undefined" && import.meta.env && import.meta.env["VITE_SUPABASE_URL"]) || "";
+  (typeof import.meta !== "undefined" && import.meta.env && import.meta.env["VITE_SUPABASE_URL"]) ||
+  "";
 const SUPABASE_KEY: string =
-  (typeof import.meta !== "undefined" && import.meta.env && import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"]) || "";
+  (typeof import.meta !== "undefined" &&
+    import.meta.env &&
+    import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"]) ||
+  "";
 
 function fileToBase64(file: File): Promise<{ data: string; mimeType: string }> {
   return new Promise((resolve, reject) => {
@@ -382,7 +612,13 @@ async function analyzeWithGemini(input: AnalyzeInput): Promise<MacroEstimate | n
       carbs_g?: number;
       fat_g?: number;
     };
-    const j = (await res.json()) as Partial<MacroEstimate> & { error?: string; items?: GeminiItem[] };
+    // Omit MacroEstimate's own `items?: EstimatedItem[]` from the intersection —
+    // otherwise `j.items` resolves to `EstimatedItem[] & GeminiItem[]` and TS
+    // picks EstimatedItem's shape for `.map`, hiding every GeminiItem field.
+    const j = (await res.json()) as Omit<Partial<MacroEstimate>, "items"> & {
+      error?: string;
+      items?: GeminiItem[];
+    };
     if (j.error || typeof j.calories !== "number") return null;
     const items: EstimatedItem[] | undefined =
       Array.isArray(j.items) && j.items.length > 0
@@ -405,7 +641,10 @@ async function analyzeWithGemini(input: AnalyzeInput): Promise<MacroEstimate | n
       source: "vision_ai",
       matchedFood: j.matchedFood ?? "meal from photo",
       note: j.note ?? "AI photo estimate — approximate, please check the numbers before saving.",
-      items,
+      // Omit the key entirely rather than setting it to undefined —
+      // exactOptionalPropertyTypes rejects an explicit `undefined` value for
+      // an optional field typed without `| undefined`.
+      ...(items ? { items } : {}),
     };
   } catch {
     return null;
@@ -458,7 +697,8 @@ export function parseServingToGrams(serving: string): number | null {
   if (/\b(plate|thali|serving|serve|portion)s?\b/.test(s)) return num * 300;
   if (/\bslices?\b/.test(s)) return num * 30;
   if (/\beggs?\b/.test(s)) return num * 50;
-  if (/\b(rotis?|chapatis?|phulkas?|parathas?|dosas?|idlis?|pieces?|pcs?)\b/.test(s)) return num * 55;
+  if (/\b(rotis?|chapatis?|phulkas?|parathas?|dosas?|idlis?|pieces?|pcs?)\b/.test(s))
+    return num * 55;
 
   if (/\d\s*kg\b/.test(s) || /\bkgs?\b/.test(s)) return num * 1000;
   if (/\d\s*g\b/.test(s) || /\bg(ram|rams|m|ms)?\b/.test(s)) return num;

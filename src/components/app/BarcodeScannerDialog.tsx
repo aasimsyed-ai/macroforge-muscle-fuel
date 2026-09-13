@@ -23,7 +23,8 @@ interface BarcodeDetectorLike {
   detect: (source: HTMLVideoElement) => Promise<DetectedBarcode[]>;
 }
 
-function getBarcodeDetectorCtor(): (new (opts: { formats: string[] }) => BarcodeDetectorLike) | null {
+function getBarcodeDetectorCtor():
+  (new (opts: { formats: string[] }) => BarcodeDetectorLike) | null {
   if (typeof window === "undefined") return null;
   const w = window as unknown as {
     BarcodeDetector?: new (opts: { formats: string[] }) => BarcodeDetectorLike;
@@ -65,7 +66,9 @@ export function BarcodeScannerDialog({
         return;
       }
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+        });
       } catch {
         if (!cancelled) setState("camera-error");
         return;
@@ -142,7 +145,6 @@ export function BarcodeScannerDialog({
         </DialogHeader>
 
         <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-secondary">
-          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
           <video ref={videoRef} muted playsInline className="size-full object-cover" />
           {state === "scanning" ? (
             <div className="pointer-events-none absolute inset-x-6 top-1/2 h-0.5 -translate-y-1/2 bg-primary/70" />

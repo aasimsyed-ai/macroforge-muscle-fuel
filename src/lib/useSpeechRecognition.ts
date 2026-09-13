@@ -12,12 +12,16 @@ interface SpeechRecognitionResultLike {
 interface SpeechRecognitionEventLike {
   results: ArrayLike<SpeechRecognitionResultLike>;
 }
+interface SpeechRecognitionErrorEventLike {
+  /** e.g. "not-allowed", "no-speech", "network", "audio-capture". */
+  error: string;
+}
 interface SpeechRecognitionLike {
   lang: string;
   interimResults: boolean;
   continuous: boolean;
   onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
   onend: (() => void) | null;
   start: () => void;
   stop: () => void;
@@ -32,25 +36,34 @@ function getSpeechRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
-/** Chrome/Android/most desktop browsers support this on-device, for free. Not iOS Safari. */
+/** Chrome/Android/most desktop browsers support this, for free. Not iOS Safari. */
 export function isSpeechRecognitionSupported(): boolean {
   return getSpeechRecognitionCtor() !== null;
 }
 
 /**
- * Wraps the browser's native, on-device speech recognition — no server
- * call, no cost, no credential. `onResult` fires once with the full
- * transcript when the user stops speaking (or taps stop); nothing is
- * saved or estimated here — the caller decides what to do with the text,
- * same as if the user had typed it.
+ * Wraps the browser's native speech recognition — no API key or backend of
+ * our own involved (the browser vendor's own speech service does the
+ * transcription; Chrome's typically sends audio to Google's servers rather
+ * than running fully on-device). `onResult` fires once with the full
+ * transcript when the user stops speaking (or taps stop); nothing is saved
+ * or estimated here — the caller decides what to do with the text, same as
+ * if the user had typed it. `onError` fires with the browser's error reason
+ * (e.g. "not-allowed" for a denied mic permission) so the caller can show
+ * the user something more useful than a mic icon that quietly turns off.
  */
-export function useSpeechRecognition(onResult: (transcript: string) => void) {
+export function useSpeechRecognition(
+  onResult: (transcript: string) => void,
+  onError?: (reason: string) => void,
+) {
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
-  // Keeps the latest callback available inside the recognition instance's
-  // event handlers without needing to recreate the instance when it changes.
+  // Keeps the latest callbacks available inside the recognition instance's
+  // event handlers without needing to recreate the instance when they change.
   const onResultRef = useRef(onResult);
   onResultRef.current = onResult;
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
 
   useEffect(() => {
     return () => {
@@ -72,7 +85,10 @@ export function useSpeechRecognition(onResult: (transcript: string) => void) {
         .trim();
       if (transcript) onResultRef.current(transcript);
     };
-    recognition.onerror = () => setListening(false);
+    recognition.onerror = (event) => {
+      setListening(false);
+      onErrorRef.current?.(event.error);
+    };
     recognition.onend = () => setListening(false);
     recognitionRef.current = recognition;
     setListening(true);

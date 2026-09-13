@@ -60,10 +60,12 @@ export async function lookupBarcodeProduct(code: string): Promise<EstimatedItem 
     // Prefer the product's own per-serving figures when Open Food Facts has
     // them; otherwise scale the per-100g figures by the declared serving
     // size (or just report per-100g if no serving size is on file at all).
-    const servingGrams = product.serving_quantity && product.serving_quantity > 0 ? product.serving_quantity : null;
+    const servingGrams =
+      product.serving_quantity && product.serving_quantity > 0 ? product.serving_quantity : null;
     const factor = servingGrams ? servingGrams / 100 : 1;
 
-    const calories = nutriments["energy-kcal_serving"] ?? (nutriments["energy-kcal_100g"] ?? 0) * factor;
+    const calories =
+      nutriments["energy-kcal_serving"] ?? (nutriments["energy-kcal_100g"] ?? 0) * factor;
     const protein = nutriments.proteins_serving ?? (nutriments.proteins_100g ?? 0) * factor;
     const carbs = nutriments.carbohydrates_serving ?? (nutriments.carbohydrates_100g ?? 0) * factor;
     const fat = nutriments.fat_serving ?? (nutriments.fat_100g ?? 0) * factor;

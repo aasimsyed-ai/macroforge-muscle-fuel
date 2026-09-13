@@ -56,7 +56,11 @@ export function useProfile() {
     queryFn: async (): Promise<Profile | null> => {
       if (guestActive()) return guestGetProfile();
       const userId = await requireUserId();
-      const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .maybeSingle();
       if (error) throw error;
       if (data) return data;
       const { data: created, error: insertError } = await supabase
@@ -124,7 +128,12 @@ export function useUpdateGoals() {
     mutationFn: async (patch: Partial<Goals> & { id: string }) => {
       const { id, ...rest } = patch;
       if (guestActive()) return guestUpdateGoals(rest);
-      const { data, error } = await supabase.from("goals").update(rest).eq("id", id).select("*").single();
+      const { data, error } = await supabase
+        .from("goals")
+        .update(rest)
+        .eq("id", id)
+        .select("*")
+        .single();
       if (error) throw error;
       return data;
     },
@@ -407,7 +416,12 @@ export function useFrequentFoods(limit = 8, options?: { enabled?: boolean }) {
   });
 }
 
-const SAVED_MEALS_KEY = ["meals", "saved-templates"] as const;
+// Deliberately not nested under "meals" — useCreateMeal/useUpdateMeal/
+// useDeleteMeal invalidate the ["meals"] prefix on every save, and saved
+// templates never change just because a meal was logged; a shared prefix
+// would trigger a pointless refetch (and possible loading-state flash) of
+// this list on every unrelated meal save.
+const SAVED_MEALS_KEY = ["saved-meals"] as const;
 
 /**
  * User-curated meal templates ("Saved Meals") — distinct from Recent (recency)
@@ -427,7 +441,9 @@ export function useSavedMeals(options?: { enabled?: boolean }) {
       const userId = await requireUserId();
       const { data, error } = await supabase
         .from("meal_templates")
-        .select("name, category, serving_amount, calories, protein_g, carbs_g, fat_g, is_estimate, estimate_source")
+        .select(
+          "name, category, serving_amount, calories, protein_g, carbs_g, fat_g, is_estimate, estimate_source",
+        )
         .eq("user_id", userId)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -469,7 +485,11 @@ export function useDeleteMealTemplate() {
     mutationFn: async (name: string) => {
       if (guestActive()) return guestDeleteMealTemplate(name);
       const userId = await requireUserId();
-      const { error } = await supabase.from("meal_templates").delete().eq("user_id", userId).eq("name", name);
+      const { error } = await supabase
+        .from("meal_templates")
+        .delete()
+        .eq("user_id", userId)
+        .eq("name", name);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: SAVED_MEALS_KEY }),
@@ -484,7 +504,9 @@ export function useMealPhotoUrl(path: string | null) {
     queryFn: async () => {
       if (!path) return null;
       if (guestActive()) return null;
-      const { data, error } = await supabase.storage.from("meal-photos").createSignedUrl(path, 60 * 60);
+      const { data, error } = await supabase.storage
+        .from("meal-photos")
+        .createSignedUrl(path, 60 * 60);
       if (error) throw error;
       return data.signedUrl;
     },
