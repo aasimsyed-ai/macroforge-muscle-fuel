@@ -71,6 +71,72 @@ export const VARIANT_OPTIONS = [
   "Deficit",
 ] as const;
 
+/** Which VARIANT_OPTIONS make sense for each muscle group — e.g. "Flat/Incline/Decline"
+ * only ever applies to chest presses, not curls or rows. Falls back to the full list
+ * for a muscle group not listed here (e.g. "Other") rather than hiding anything. */
+const MUSCLE_GROUP_VARIANTS: Partial<Record<(typeof MUSCLE_GROUPS)[number], readonly string[]>> = {
+  Chest: ["Flat", "Incline", "Decline", "Close-Grip", "Wide-Grip", "Single-Arm", "Paused"],
+  Back: ["Wide-Grip", "Close-Grip", "Single-Arm", "Seated", "Standing", "Reverse-Grip", "Paused"],
+  Shoulders: ["Seated", "Standing", "Single-Arm", "Wide-Grip"],
+  Biceps: ["Wide-Grip", "Close-Grip", "Reverse-Grip", "Seated", "Standing", "Single-Arm"],
+  Triceps: ["Close-Grip", "Reverse-Grip", "Single-Arm", "Seated", "Standing"],
+  Legs: [
+    "Sumo",
+    "Wide-Grip",
+    "Close-Grip",
+    "Paused",
+    "Single-Arm",
+    "Deficit",
+    "Seated",
+    "Standing",
+  ],
+  Glutes: ["Single-Arm", "Standing", "Seated"],
+  Core: ["Standing", "Seated"],
+  "Full Body": ["Sumo", "Deficit", "Single-Arm"],
+};
+
+/**
+ * Variant options relevant to a specific exercise: starts from the muscle
+ * group's usual subset, then drops any variant already implied by the
+ * exercise's own name (e.g. "Standing Lat Pulldown" shouldn't also offer
+ * "Standing" as a separate variant pick — it'd just be redundant).
+ */
+export function getVariantOptionsFor(muscleGroup: string, exerciseName: string): readonly string[] {
+  const base =
+    MUSCLE_GROUP_VARIANTS[muscleGroup as (typeof MUSCLE_GROUPS)[number]] ?? VARIANT_OPTIONS;
+  const name = exerciseName.toLowerCase();
+  return base.filter((variant) => !name.includes(variant.toLowerCase()));
+}
+
+/** Equipment keywords found in an exercise's own name — checked in order, first match wins. */
+const EQUIPMENT_NAME_HINTS: ReadonlyArray<{ keywords: string[]; options: readonly string[] }> = [
+  { keywords: ["smith machine"], options: ["Smith Machine"] },
+  { keywords: ["machine"], options: ["Machine"] },
+  { keywords: ["cable"], options: ["Cable"] },
+  { keywords: ["ez bar", "ez-bar"], options: ["EZ Bar", "Barbell"] },
+  { keywords: ["barbell"], options: ["Barbell", "EZ Bar"] },
+  { keywords: ["dumbbell"], options: ["Dumbbell"] },
+  { keywords: ["kettlebell"], options: ["Kettlebell"] },
+  { keywords: ["band"], options: ["Resistance Band"] },
+];
+
+/**
+ * Equipment options relevant to a specific exercise: a bodyweight exercise
+ * (per the catalog's `is_bodyweight` flag) only offers "Bodyweight"; otherwise
+ * a keyword found in the exercise's own name (e.g. "Cable Crossover" ->
+ * Cable) narrows the list. Falls back to every option for names that don't
+ * name their own equipment (e.g. "Row", "Squat") rather than guessing wrong.
+ */
+export function getEquipmentOptionsFor(
+  exerciseName: string,
+  isBodyweight: boolean,
+): readonly string[] {
+  if (isBodyweight) return ["Bodyweight"];
+  const name = exerciseName.toLowerCase();
+  const hint = EQUIPMENT_NAME_HINTS.find((h) => h.keywords.some((k) => name.includes(k)));
+  return hint?.options ?? EQUIPMENT_OPTIONS;
+}
+
 export const WEIGHT_MODES: ReadonlyArray<{ value: WeightMode; label: string }> = [
   { value: "external", label: "External load" },
   { value: "bodyweight", label: "Bodyweight" },

@@ -1,7 +1,4 @@
-import {
-  analyzeExerciseProgression,
-  type ProgressionAnalysis,
-} from "./calculations";
+import { analyzeExerciseProgression, type ProgressionAnalysis } from "./calculations";
 import * as api from "./api";
 import type { NotificationDraft, NotificationPreferences } from "./api";
 import type { TrainingPreferences } from "./types";
@@ -100,7 +97,8 @@ export function buildWorkoutNotifications(ctx: NotificationContext): Notificatio
       category: "motivation",
       priority: "low",
       title: "Welcome back",
-      message: "You returned to training after a break. Rebuilding consistency is a meaningful step.",
+      message:
+        "You returned to training after a break. Rebuilding consistency is a meaningful step.",
       dedupeKey: `motivation:return:${week}`,
     });
   }
@@ -228,7 +226,7 @@ export async function runWorkoutNotifications(
   if (summary.totalSessions === 0) return;
 
   const progression: ExerciseProgressionResult[] = [];
-  for (const name of recentNames) {
+  for (const { name } of recentNames) {
     try {
       const history = await api.fetchExerciseHistory(name);
       if (history.length === 0) continue;

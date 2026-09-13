@@ -73,7 +73,10 @@ export async function fetchRecentSessionVolumes(limit = 8): Promise<SessionVolum
     .reverse();
 }
 
-export async function fetchWorkoutSessions(fromDate: string, toDate: string): Promise<SessionRow[]> {
+export async function fetchWorkoutSessions(
+  fromDate: string,
+  toDate: string,
+): Promise<SessionRow[]> {
   const user = await requireUser();
   const { data, error } = await supabase
     .from("workout_sessions")
@@ -242,7 +245,9 @@ export interface RecentWorkoutSessionSummary {
 }
 
 /** Recent sessions for the "copy from a previous workout" picker. */
-export async function fetchRecentWorkoutSessions(limit = 10): Promise<RecentWorkoutSessionSummary[]> {
+export async function fetchRecentWorkoutSessions(
+  limit = 10,
+): Promise<RecentWorkoutSessionSummary[]> {
   const user = await requireUser();
   const { data: sessions, error } = await supabase
     .from("workout_sessions")
@@ -279,7 +284,9 @@ export async function fetchRecentWorkoutSessions(limit = 10): Promise<RecentWork
 }
 
 /** Turn a saved session's exercises/sets back into editable drafts, so the user only needs to update weights. */
-export function sessionDetailToExerciseDrafts(detail: WorkoutSessionDetail): WorkoutExerciseDraft[] {
+export function sessionDetailToExerciseDrafts(
+  detail: WorkoutSessionDetail,
+): WorkoutExerciseDraft[] {
   return detail.exercises.map((exercise) => ({
     muscleGroup: exercise.muscle_group,
     exerciseName: exercise.exercise_name,
@@ -429,7 +436,9 @@ export async function fetchWorkoutStats(
     }
   }
 
-  const muscleGroups = [...new Set(exercises.map((row) => row.muscle_group).filter(Boolean))].sort();
+  const muscleGroups = [
+    ...new Set(exercises.map((row) => row.muscle_group).filter(Boolean)),
+  ].sort();
 
   return {
     sessions,
@@ -532,7 +541,9 @@ function dominantWeight(
   return best;
 }
 
-export async function fetchExerciseHistory(exerciseName: string): Promise<ProgressionHistoryItem[]> {
+export async function fetchExerciseHistory(
+  exerciseName: string,
+): Promise<ProgressionHistoryItem[]> {
   const user = await requireUser();
   const name = exerciseName.trim();
   if (!name) return [];
@@ -563,9 +574,7 @@ export async function fetchExerciseHistory(exerciseName: string): Promise<Progre
   const dateBySession = new Map(
     (sessionResult.data ?? []).map((row) => [row.id, row.workout_date] as const),
   );
-  const sessionByExercise = new Map(
-    exercises.map((row) => [row.id, row.session_id] as const),
-  );
+  const sessionByExercise = new Map(exercises.map((row) => [row.id, row.session_id] as const));
 
   type MiniSet = { reps: number; weightKg: number | null; completed: boolean; rir: number | null };
   const setsBySession = new Map<string, MiniSet[]>();
@@ -589,17 +598,25 @@ export async function fetchExerciseHistory(exerciseName: string): Promise<Progre
 
     const completedSets = sets.filter((set) => set.completed).length;
     const totalSets = sets.length;
-    const maxReps = sets.reduce((max, set) => (set.completed && set.reps > max ? set.reps : max), 0);
+    const maxReps = sets.reduce(
+      (max, set) => (set.completed && set.reps > max ? set.reps : max),
+      0,
+    );
     const totalVolume = sets.reduce(
       (sum, set) =>
-        sum + (set.completed && set.weightKg && Number.isFinite(set.weightKg) ? set.reps * set.weightKg : 0),
+        sum +
+        (set.completed && set.weightKg && Number.isFinite(set.weightKg)
+          ? set.reps * set.weightKg
+          : 0),
       0,
     );
     const rirValues = sets
       .map((set) => set.rir)
       .filter((value): value is number => value !== null && Number.isFinite(value));
     const averageRir =
-      rirValues.length > 0 ? rirValues.reduce((sum, value) => sum + value, 0) / rirValues.length : null;
+      rirValues.length > 0
+        ? rirValues.reduce((sum, value) => sum + value, 0) / rirValues.length
+        : null;
 
     items.push({
       sessionDate,
@@ -617,23 +634,41 @@ export async function fetchExerciseHistory(exerciseName: string): Promise<Progre
   );
 }
 
-/** Distinct exercise names the user has logged, most recent first. */
-export async function fetchRecentExerciseNames(limit = 12): Promise<string[]> {
+export interface RecentExerciseName {
+  name: string;
+  muscleGroup: string;
+  equipment: string | null;
+  exerciseVariant: string | null;
+}
+
+/**
+ * Distinct exercises the user has logged before, most recent first — this is
+ * how a name typed under "Other" becomes available again later: the catalog
+ * table itself is shared/read-only (regular users can't write to it), so
+ * reuse comes from the user's own workout history instead, scoped by RLS to
+ * `auth.uid()` like every other query here.
+ */
+export async function fetchRecentExerciseNames(limit = 40): Promise<RecentExerciseName[]> {
   const user = await requireUser();
   const { data, error } = await supabase
     .from("workout_exercises")
-    .select("exercise_name, created_at")
+    .select("exercise_name, muscle_group, equipment, exercise_variant, created_at")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
-    .limit(200);
+    .limit(300);
   if (error) throw error;
   const seen = new Set<string>();
-  const names: string[] = [];
+  const names: RecentExerciseName[] = [];
   for (const row of data ?? []) {
     const key = row.exercise_name.trim().toLowerCase();
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    names.push(row.exercise_name);
+    names.push({
+      name: row.exercise_name,
+      muscleGroup: row.muscle_group,
+      equipment: row.equipment,
+      exerciseVariant: row.exercise_variant,
+    });
     if (names.length >= limit) break;
   }
   return names;

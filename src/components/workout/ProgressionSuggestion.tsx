@@ -35,7 +35,7 @@ export function ProgressionSuggestion() {
 
   useEffect(() => {
     if (!selected && names.data && names.data.length > 0) {
-      setSelected(names.data[0] ?? null);
+      setSelected(names.data[0]?.name ?? null);
     }
   }, [names.data, selected]);
 
@@ -60,8 +60,8 @@ export function ProgressionSuggestion() {
             </SelectTrigger>
             <SelectContent>
               {names.data.map((name) => (
-                <SelectItem key={name} value={name}>
-                  {name}
+                <SelectItem key={name.name} value={name.name}>
+                  {name.name}
                 </SelectItem>
               ))}
             </SelectContent>

@@ -21,6 +21,7 @@ import { INTENSITIES } from "@/lib/workouts/constants";
 import {
   useCreateWorkout,
   useExerciseCatalog,
+  useRecentExerciseNames,
   useRecentWorkoutSessions,
   useReplaceWorkout,
   useTrainingPreferences,
@@ -70,12 +71,15 @@ export function WorkoutLogger({
 }) {
   const isEditing = !!initialData;
   const catalog = useExerciseCatalog();
+  const recentExerciseNames = useRecentExerciseNames();
   const preferences = useTrainingPreferences();
   const recentSessions = useRecentWorkoutSessions();
   const create = useCreateWorkout();
   const replace = useReplaceWorkout();
 
-  const [draft, setDraft] = useState<WorkoutSessionDraft>(() => initialData?.draft ?? initialDraft());
+  const [draft, setDraft] = useState<WorkoutSessionDraft>(
+    () => initialData?.draft ?? initialDraft(),
+  );
   const [errors, setErrors] = useState<string[]>([]);
   const [showWearable, setShowWearable] = useState(
     () =>
@@ -177,16 +181,24 @@ export function WorkoutLogger({
     submittingRef.current = true;
     try {
       if (isEditing && initialData) {
-        const result = await replace.mutateAsync({ oldId: initialData.sessionId, draft, bodyWeightKg });
+        const result = await replace.mutateAsync({
+          oldId: initialData.sessionId,
+          draft,
+          bodyWeightKg,
+        });
         if (result.oldSessionRemoved) {
           toast.success("Workout updated");
         } else {
-          toast.warning("Workout updated, but the old entry couldn't be removed. Please check Workout History.");
+          toast.warning(
+            "Workout updated, but the old entry couldn't be removed. Please check Workout History.",
+          );
         }
       } else {
         await create.mutateAsync({ draft, bodyWeightKg });
         const moved = Math.round(totalVolume);
-        toast.success(moved > 0 ? `Workout logged ✓ · ${moved.toLocaleString()} kg moved` : "Workout logged ✓");
+        toast.success(
+          moved > 0 ? `Workout logged ✓ · ${moved.toLocaleString()} kg moved` : "Workout logged ✓",
+        );
         setDraft(initialDraft());
         setDraftVersion((v) => v + 1);
         phaseTouched.current = false;
@@ -326,6 +338,7 @@ export function WorkoutLogger({
             index={index}
             exercise={exercise}
             catalog={catalog.data ?? []}
+            recentExerciseNames={recentExerciseNames.data ?? []}
             canRemove={draft.exercises.length > 1}
             onChange={(patch) => patchExercise(index, patch)}
             onRemove={() => removeExercise(index)}
@@ -366,7 +379,10 @@ export function WorkoutLogger({
                   max={240}
                   value={draft.averageHeartRate === null ? "" : String(draft.averageHeartRate)}
                   onChange={(event) =>
-                    setDraft((c) => ({ ...c, averageHeartRate: toNumberOrNull(event.target.value) }))
+                    setDraft((c) => ({
+                      ...c,
+                      averageHeartRate: toNumberOrNull(event.target.value),
+                    }))
                   }
                 />
               </div>
