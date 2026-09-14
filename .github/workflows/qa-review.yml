@@ -1,0 +1,121 @@
+name: QA Review (Gemini)
+
+# Fires on every PR opened/updated against main. Never listens on comment
+# events, so the QA bot's own PR comment can never trigger another run —
+# see docs/qa-automation.md for the full recursion-safety reasoning.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+# Least-privilege on purpose: contents:read means this token cannot push or
+# merge anything even if instructed to. No Supabase/deploy secrets are ever
+# passed to this workflow.
+permissions:
+  contents: read
+  pull-requests: write
+
+# A new push to the same PR cancels any QA run already in progress for it,
+# so pushing several fix commits quickly only pays for one final review.
+concurrency:
+  group: qa-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  qa-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Compute PR diff (diff only — not the whole repo)
+        run: |
+          git fetch origin "${{ github.event.pull_request.base.ref }}" --depth=50
+          git diff --unified=3 "origin/${{ github.event.pull_request.base.ref }}...HEAD" > pr.diff || true
+          git diff --name-status "origin/${{ github.event.pull_request.base.ref }}...HEAD" > changed-files.txt || true
+          git diff --name-only --diff-filter=ACMR "origin/${{ github.event.pull_request.base.ref }}...HEAD" \
+            -- '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.cjs' > changed-lintable-files.txt || true
+
+      # Scoped to the files this PR actually changed, not the whole repo —
+      # this project's pre-existing repo-wide lint debt (1000+ errors) would
+      # otherwise drown out the one or two lines that matter for THIS diff.
+      - name: Lint (changed files only)
+        id: lint
+        continue-on-error: true
+        run: |
+          if [ -s changed-lintable-files.txt ]; then
+            bunx eslint $(cat changed-lintable-files.txt) 2>&1 | tee lint-output.txt
+          else
+            echo "No lintable files changed in this diff — nothing to lint." | tee lint-output.txt
+          fi
+
+      - name: Typecheck
+        id: typecheck
+        continue-on-error: true
+        run: bunx tsc --noEmit 2>&1 | tee typecheck-output.txt
+
+      - name: Build
+        id: build
+        continue-on-error: true
+        run: bun run build 2>&1 | tee build-output.txt
+
+      - name: Test
+        id: test
+        continue-on-error: true
+        run: bun run test 2>&1 | tee test-output.txt
+
+      # Safety valve for an unattended repeat-fix loop: if this PR has
+      # already collected 8 QA verdicts without shipping, stop spending API
+      # calls and ask for a human look instead of reviewing again.
+      - name: Count prior QA reviews on this PR
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          COUNT=$(gh api "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" \
+            --jq '[.[] | select(.body | test("QA VERDICT"))] | length')
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+
+      - name: Run QA review (Gemini)
+        id: qa
+        if: fromJSON(steps.guard.outputs.count) < 8
+        env:
+          QA_PROVIDER: gemini
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: gemini-3.6-flash
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BASE: ${{ github.event.pull_request.base.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          LINT_EXIT: ${{ steps.lint.outcome }}
+          TYPECHECK_EXIT: ${{ steps.typecheck.outcome }}
+          BUILD_EXIT: ${{ steps.build.outcome }}
+          TEST_EXIT: ${{ steps.test.outcome }}
+        run: node .github/scripts/qa-review.mjs
+
+      - name: Post QA report to PR
+        if: fromJSON(steps.guard.outputs.count) < 8
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr comment "${{ github.event.pull_request.number }}" --body-file qa-review-output.md
+
+      - name: Post iteration-limit notice
+        if: fromJSON(steps.guard.outputs.count) >= 8
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment "${{ github.event.pull_request.number }}" --body \
+            "**QA VERDICT: NEEDS HUMAN REVIEW**
+
+          Automated QA has already reviewed this PR 8 times without a SHIP verdict. Pausing automated reviews here to avoid an unattended loop — please take a manual look."
