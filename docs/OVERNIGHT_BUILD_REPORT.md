@@ -206,7 +206,7 @@ workflow triggered by pushing commit `fbf6ff8` to PR #6:
 | test | **PASS** |
 
 (Run: https://github.com/aasimsyed-ai/macroforge-muscle-fuel/pull/6 — see
-the bot's PR comment on commit `fbf6ff8`.)
+the bot's PR comment on commit `fbf6ff8`, and re-confirmed green again on `f39c925` after adding this report.)
 
 ## 10. Database migrations
 - **Applied** (verified live against the production DB, read-only
