@@ -67,7 +67,10 @@ export function WorkoutSetEditor({
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {/* Reps(1) + Weight(2) + Rest(1) + Completed(1) = 5 units — sm:grid-cols-5
+          so all four fields land on one row instead of orphaning Completed
+          onto a second row with empty cells beside it. */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         <div className="space-y-1">
           <Label htmlFor={`reps-${set.setNumber}`} className="text-[11px]">
             Reps

@@ -45,8 +45,14 @@ function makeSet(
     reps: template?.reps ?? 10,
     weightKg: template?.weightKg ?? null,
     weightMode: template?.weightMode ?? (isBodyweight ? "bodyweight" : "external"),
-    rir: template?.rir ?? null,
-    rpe: template?.rpe ?? null,
+    // RIR/RPE have no entry UI anymore — never carry them forward onto a
+    // brand-new set from a copied-forward template (e.g. "copy a previous
+    // workout" seeds sets with historical rir/rpe; adding a further set to
+    // that exercise shouldn't silently inherit a value the user can't see
+    // or clear). Existing sets loaded from history keep their real values;
+    // only new sets default to null.
+    rir: null,
+    rpe: null,
     completed: true,
     restSeconds: template?.restSeconds ?? 60,
   };
@@ -140,15 +146,38 @@ export function WorkoutExerciseForm({
   ) {
     const trimmed = name.trim();
     if (!trimmed) return;
+    const equipment = opts?.equipment ?? null;
+    const variant = opts?.variant ?? null;
+    const isBodyweight = opts?.isBodyweight ?? false;
     onChange({
       exerciseName: trimmed,
       exerciseCatalogId: opts?.catalogId ?? null,
-      equipment: opts?.equipment ?? null,
-      exerciseVariant: opts?.variant ?? null,
-      isBodyweight: opts?.isBodyweight ?? false,
+      equipment,
+      exerciseVariant: variant,
+      isBodyweight,
+      // weightMode is derived from isBodyweight, not a user choice (the Load
+      // picker is gone) — resync any sets already added under a different
+      // exercise, so switching exercises mid-entry can't leave a set's
+      // weightMode stuck on "bodyweight" (which calculateSetVolume always
+      // scores as 0 kg moved) after switching to a non-bodyweight exercise,
+      // or vice versa.
+      sets: exercise.sets.map((set) => ({
+        ...set,
+        weightMode: isBodyweight ? "bodyweight" : "external",
+      })),
     });
-    setOtherEquipment(false);
-    setOtherVariant(false);
+    // A recent selection can carry a free-typed equipment/variant that isn't
+    // in this (possibly different) exercise's preset options — recompute
+    // against the exercise being switched to, rather than always assuming a
+    // preset match, so the value renders in the "Other" text field instead
+    // of silently going blank in a Select with no matching item.
+    setOtherEquipment(
+      !!equipment &&
+        !getEquipmentOptionsFor(trimmed, opts?.isBodyweight ?? false).includes(equipment),
+    );
+    setOtherVariant(
+      !!variant && !getVariantOptionsFor(exercise.muscleGroup, trimmed).includes(variant),
+    );
     setExercisePickerOpen(false);
     setExerciseQuery("");
   }
@@ -356,9 +385,7 @@ export function WorkoutExerciseForm({
             Equipment (optional)
           </Label>
           <Select
-            {...(otherEquipment || exercise.equipment
-              ? { value: otherEquipment ? OTHER_EQUIPMENT : (exercise.equipment as string) }
-              : {})}
+            value={otherEquipment ? OTHER_EQUIPMENT : (exercise.equipment ?? NONE_EQUIPMENT)}
             onValueChange={handleEquipmentSelect}
           >
             <SelectTrigger id={`equipment-${index}`}>
@@ -389,9 +416,7 @@ export function WorkoutExerciseForm({
             Variant (optional)
           </Label>
           <Select
-            {...(otherVariant || exercise.exerciseVariant
-              ? { value: otherVariant ? OTHER_VARIANT : (exercise.exerciseVariant as string) }
-              : {})}
+            value={otherVariant ? OTHER_VARIANT : (exercise.exerciseVariant ?? NONE_VARIANT)}
             onValueChange={handleVariantSelect}
           >
             <SelectTrigger id={`variant-${index}`}>
