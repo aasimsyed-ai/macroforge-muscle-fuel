@@ -3,6 +3,7 @@ import { Plus, Settings2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StrengthMiniTrend } from "@/components/app/StrengthMiniTrend";
 import { guestActive } from "@/lib/guest";
 import { useTrainingPreferences, useWorkoutStats } from "@/lib/workouts/hooks";
 import { runWorkoutNotifications } from "@/lib/workouts/notifications";
@@ -98,6 +99,7 @@ export function WorkoutDashboard({
       ) : stats.data ? (
         <>
           <WorkoutSummaryCards stats={stats.data} />
+          <StrengthMiniTrend />
           <div className="grid gap-4 lg:grid-cols-2">
             <ProgressionSuggestion />
             <ExperienceLevelCard />

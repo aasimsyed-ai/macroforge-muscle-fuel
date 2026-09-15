@@ -15,7 +15,6 @@ import { ProgressRing } from "@/components/app/ProgressRing";
 import { StatCard } from "@/components/app/StatCard";
 import { StreakBadges } from "@/components/app/StreakBadges";
 import { BodyTrendChart, DailyIntakeChart, HabitChart } from "@/components/app/TrendCharts";
-import { StrengthMiniTrend } from "@/components/app/StrengthMiniTrend";
 import { WeeklyRecapCard } from "@/components/app/WeeklyRecapCard";
 import { WeightJourneyCard } from "@/components/app/WeightJourneyCard";
 import { TrackingModeToggle } from "@/components/workout/TrackingModeToggle";
@@ -408,7 +407,6 @@ function Dashboard() {
           />
         ) : null}
         <HabitChart metrics={metrics} workoutMinutesByDate={workoutMinutesByDate} />
-        <StrengthMiniTrend />
         <MetricsQuickLog date={quickLogDate} metric={quickLogMetric} goals={goals} />
       </div>
 

@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { format } from "date-fns";
 import { ImageIcon, Pencil, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,16 @@ function MealPhoto({ path }: { path: string | null }) {
 
 export function MealList({ meals }: { meals: Meal[] }) {
   const del = useDeleteMeal();
+
+  async function handleDelete(meal: Meal) {
+    if (!window.confirm(`Delete "${meal.name}"? This cannot be undone.`)) return;
+    try {
+      await del.mutateAsync(meal.id);
+      toast.success("Meal deleted");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not delete the meal");
+    }
+  }
 
   if (!meals.length) {
     return (
@@ -67,7 +78,7 @@ export function MealList({ meals }: { meals: Meal[] }) {
               size="icon"
               aria-label={`Delete ${m.name}`}
               disabled={del.isPending}
-              onClick={() => del.mutate(m.id)}
+              onClick={() => handleDelete(m)}
             >
               <Trash2 className="size-4" />
             </Button>
