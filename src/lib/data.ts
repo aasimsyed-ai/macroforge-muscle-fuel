@@ -3,17 +3,21 @@ import { format } from "date-fns";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import { splitItems } from "@/lib/food-estimate";
 import {
   guestActive,
   guestAllMeals,
   guestAllMetrics,
   guestCreateMeal,
   guestDeleteMeal,
+  guestDeleteMealTemplate,
   guestGetGoals,
   guestGetMeal,
   guestGetProfile,
+  guestListMealTemplates,
   guestListMeals,
   guestListMetrics,
+  guestSaveMealTemplate,
   guestSaveMetric,
   guestUpdateGoals,
   guestUpdateMeal,
@@ -52,7 +56,11 @@ export function useProfile() {
     queryFn: async (): Promise<Profile | null> => {
       if (guestActive()) return guestGetProfile();
       const userId = await requireUserId();
-      const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .maybeSingle();
       if (error) throw error;
       if (data) return data;
       const { data: created, error: insertError } = await supabase
@@ -120,7 +128,12 @@ export function useUpdateGoals() {
     mutationFn: async (patch: Partial<Goals> & { id: string }) => {
       const { id, ...rest } = patch;
       if (guestActive()) return guestUpdateGoals(rest);
-      const { data, error } = await supabase.from("goals").update(rest).eq("id", id).select("*").single();
+      const { data, error } = await supabase
+        .from("goals")
+        .update(rest)
+        .eq("id", id)
+        .select("*")
+        .single();
       if (error) throw error;
       return data;
     },
@@ -326,6 +339,163 @@ export function useRecentMeals(limit = 12) {
   });
 }
 
+export interface FrequentFood {
+  /** Lower-cased, trimmed food phrase as split out of a logged meal's name. */
+  name: string;
+  count: number;
+}
+
+/**
+ * Parses each logged meal's name into individual food phrases (the same
+ * +/,/and splitter the estimator itself uses on "2 eggs + toast + banana")
+ * and ranks by how often each phrase recurs across meal history — distinct
+ * from a whole repeated meal combo, e.g. "2 eggs + toast" logged 4 times and
+ * "2 eggs + oats" logged 3 times both count toward "2 eggs" (7). A food
+ * split out of only one logged meal isn't "frequent," so singles are
+ * excluded.
+ */
+export function rankFoodsByFrequency(mealNames: string[], limit: number): FrequentFood[] {
+  const byFood = new Map<string, number>();
+  for (const name of mealNames) {
+    // Dedupe phrases within a single meal first — "egg + egg" should count
+    // as one meal containing egg, not two, so a food's count reflects how
+    // many separate meals it appeared in.
+    const phrasesInThisMeal = new Set(
+      splitItems(name.toLowerCase())
+        .map((phrase) => phrase.trim())
+        .filter(Boolean),
+    );
+    for (const key of phrasesInThisMeal) {
+      byFood.set(key, (byFood.get(key) ?? 0) + 1);
+    }
+  }
+  return [...byFood.entries()]
+    .filter(([, count]) => count >= 2)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([name, count]) => ({ name, count }));
+}
+
+const FREQUENT_FOODS_WINDOW_DAYS = 90;
+
+/**
+ * Individual foods logged repeatedly over time — the "Frequent" half of the
+ * Recent/Frequent switch on Add Meal. Lazy: pass `enabled: false` until the
+ * user actually asks for it, so viewing "Recent" (the default) never pays
+ * for this query. Only meal names are fetched — no macros — since applying a
+ * frequent food re-runs the normal auto-estimate rather than replaying an
+ * old combined meal's totals.
+ */
+export function useFrequentFoods(limit = 8, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ["meals", "frequent-foods", limit],
+    enabled: options?.enabled ?? true,
+    staleTime: 1000 * 60,
+    queryFn: async (): Promise<FrequentFood[]> => {
+      if (guestActive()) {
+        return rankFoodsByFrequency(
+          guestAllMeals().map((m) => m.name),
+          limit,
+        );
+      }
+      const userId = await requireUserId();
+      const since = new Date();
+      since.setDate(since.getDate() - FREQUENT_FOODS_WINDOW_DAYS);
+      const { data, error } = await supabase
+        .from("meals")
+        .select("name")
+        .eq("user_id", userId)
+        .gte("eaten_at", since.toISOString())
+        .limit(300);
+      if (error) throw error;
+      return rankFoodsByFrequency(
+        (data ?? []).map((row) => row.name),
+        limit,
+      );
+    },
+  });
+}
+
+// Deliberately not nested under "meals" — useCreateMeal/useUpdateMeal/
+// useDeleteMeal invalidate the ["meals"] prefix on every save, and saved
+// templates never change just because a meal was logged; a shared prefix
+// would trigger a pointless refetch (and possible loading-state flash) of
+// this list on every unrelated meal save.
+const SAVED_MEALS_KEY = ["saved-meals"] as const;
+
+/**
+ * User-curated meal templates ("Saved Meals") — distinct from Recent (recency)
+ * and Frequent (auto-ranked by count): these only ever change when the user
+ * explicitly saves or deletes one. Surfaces a genuine error (e.g. the
+ * meal_templates table not existing yet) rather than swallowing it, so the
+ * UI can show a clear "not set up yet" state instead of a silent empty list —
+ * same precedent as the rest of this app's not-yet-migrated features.
+ */
+export function useSavedMeals(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: SAVED_MEALS_KEY,
+    enabled: options?.enabled ?? true,
+    staleTime: 1000 * 60,
+    queryFn: async (): Promise<MealTemplate[]> => {
+      if (guestActive()) return guestListMealTemplates();
+      const userId = await requireUserId();
+      const { data, error } = await supabase
+        .from("meal_templates")
+        .select(
+          "name, category, serving_amount, calories, protein_g, carbs_g, fat_g, is_estimate, estimate_source",
+        )
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map((t) => ({
+        name: t.name,
+        category: t.category,
+        serving_amount: t.serving_amount,
+        calories: Number(t.calories),
+        protein_g: Number(t.protein_g),
+        carbs_g: Number(t.carbs_g),
+        fat_g: Number(t.fat_g),
+        is_estimate: t.is_estimate,
+        estimate_source: t.estimate_source,
+      }));
+    },
+  });
+}
+
+/** Upserts by (user, name) — saving under an existing name replaces it rather than duplicating. */
+export function useSaveMealTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (template: MealTemplate) => {
+      if (guestActive()) return guestSaveMealTemplate(template);
+      const userId = await requireUserId();
+      const { error } = await supabase
+        .from("meal_templates")
+        .upsert({ user_id: userId, ...template }, { onConflict: "user_id,name" });
+      if (error) throw error;
+      return template;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: SAVED_MEALS_KEY }),
+  });
+}
+
+export function useDeleteMealTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (name: string) => {
+      if (guestActive()) return guestDeleteMealTemplate(name);
+      const userId = await requireUserId();
+      const { error } = await supabase
+        .from("meal_templates")
+        .delete()
+        .eq("user_id", userId)
+        .eq("name", name);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: SAVED_MEALS_KEY }),
+  });
+}
+
 export function useMealPhotoUrl(path: string | null) {
   return useQuery({
     queryKey: ["meal-photo", path],
@@ -334,7 +504,9 @@ export function useMealPhotoUrl(path: string | null) {
     queryFn: async () => {
       if (!path) return null;
       if (guestActive()) return null;
-      const { data, error } = await supabase.storage.from("meal-photos").createSignedUrl(path, 60 * 60);
+      const { data, error } = await supabase.storage
+        .from("meal-photos")
+        .createSignedUrl(path, 60 * 60);
       if (error) throw error;
       return data.signedUrl;
     },

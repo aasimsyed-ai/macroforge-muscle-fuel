@@ -6,7 +6,15 @@
  * data is pushed up to Supabase and the local copy is cleared.
  */
 import { supabase } from "@/integrations/supabase/client";
-import type { DailyMetric, Goals, Meal, MealInput, MealUpdate, Profile } from "@/lib/data";
+import type {
+  DailyMetric,
+  Goals,
+  Meal,
+  MealInput,
+  MealTemplate,
+  MealUpdate,
+  Profile,
+} from "@/lib/data";
 
 const KEY = "mf:guest:v1";
 export const TRIAL_DAYS = 3;
@@ -18,6 +26,8 @@ type GuestBlob = {
   goals: Goals;
   meals: Meal[];
   metrics: DailyMetric[];
+  /** Optional so blobs saved before Saved Meals shipped still parse — see read(). */
+  mealTemplates?: MealTemplate[];
 };
 
 function now(): string {
@@ -35,7 +45,11 @@ function uid(): string {
 function read(): GuestBlob | null {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as GuestBlob) : null;
+    if (!raw) return null;
+    const blob = JSON.parse(raw) as GuestBlob;
+    // Backfill for guest sessions started before Saved Meals shipped.
+    if (!blob.mealTemplates) blob.mealTemplates = [];
+    return blob;
   } catch {
     return null;
   }
@@ -58,6 +72,9 @@ function freshProfile(): Profile {
     goal_weight_kg: 70,
     height_cm: 170,
     onboarded: false,
+    push_notifications_enabled: false,
+    push_quiet_hours_end: null,
+    push_quiet_hours_start: null,
     sex: null,
     start_weight_kg: 64,
     updated_at: now(),
@@ -92,7 +109,14 @@ export function guestActive(): boolean {
 
 export function ensureGuest(): void {
   if (read()) return;
-  write({ startedAt: now(), profile: freshProfile(), goals: freshGoals(), meals: [], metrics: [] });
+  write({
+    startedAt: now(),
+    profile: freshProfile(),
+    goals: freshGoals(),
+    meals: [],
+    metrics: [],
+    mealTemplates: [],
+  });
 }
 
 export function guestDaysUsed(): number {
@@ -240,7 +264,36 @@ export function guestDeleteMeal(id: string): void {
   write(blob);
 }
 
-export function guestSaveMetric(input: Partial<DailyMetric> & { metric_date: string }): DailyMetric {
+/* ----------------------------- saved meals -------------------------------- */
+
+export function guestListMealTemplates(): MealTemplate[] {
+  return read()?.mealTemplates ?? [];
+}
+
+/** Upserts by exact name — saving under a name that already exists replaces it. */
+export function guestSaveMealTemplate(template: MealTemplate): MealTemplate {
+  ensureGuest();
+  const blob = read()!;
+  const idx = blob.mealTemplates!.findIndex((t) => t.name === template.name);
+  if (idx >= 0) {
+    blob.mealTemplates![idx] = template;
+  } else {
+    blob.mealTemplates!.push(template);
+  }
+  write(blob);
+  return template;
+}
+
+export function guestDeleteMealTemplate(name: string): void {
+  const blob = read();
+  if (!blob) return;
+  blob.mealTemplates = (blob.mealTemplates ?? []).filter((t) => t.name !== name);
+  write(blob);
+}
+
+export function guestSaveMetric(
+  input: Partial<DailyMetric> & { metric_date: string },
+): DailyMetric {
   ensureGuest();
   const blob = read()!;
   const idx = blob.metrics.findIndex((m) => m.metric_date === input.metric_date);
@@ -285,73 +338,104 @@ export async function migrateGuestToCloud(): Promise<boolean> {
   const userId = userData.user?.id;
   if (!userId) return false;
 
-  try {
-    await supabase.from("profiles").upsert({
-      id: userId,
-      age: blob.profile.age,
-      display_name: blob.profile.display_name,
-      goal_weight_kg: blob.profile.goal_weight_kg,
-      height_cm: blob.profile.height_cm,
-      onboarded: blob.profile.onboarded,
-      sex: blob.profile.sex,
-      start_weight_kg: blob.profile.start_weight_kg,
-    });
+  // No try/finally around these — a thrown error here must propagate to the
+  // caller (which leaves the local guest copy in place on failure) rather
+  // than reach clearGuest() below. Losing the local copy after a failed
+  // write would silently destroy a guest's trial data with no way to retry.
+  await supabase.from("profiles").upsert({
+    id: userId,
+    age: blob.profile.age,
+    display_name: blob.profile.display_name,
+    goal_weight_kg: blob.profile.goal_weight_kg,
+    height_cm: blob.profile.height_cm,
+    onboarded: blob.profile.onboarded,
+    sex: blob.profile.sex,
+    start_weight_kg: blob.profile.start_weight_kg,
+  });
 
-    await supabase.from("goals").update({ is_active: false }).eq("user_id", userId);
-    await supabase.from("goals").insert({
-      user_id: userId,
-      is_active: true,
-      calorie_target: blob.goals.calorie_target,
-      protein_target_g: blob.goals.protein_target_g,
-      carb_target_g: blob.goals.carb_target_g,
-      fat_target_g: blob.goals.fat_target_g,
-      water_target_ml: blob.goals.water_target_ml,
-      creatine_target_g: blob.goals.creatine_target_g,
-      sleep_target_hours: blob.goals.sleep_target_hours,
-      workout_days_per_week: blob.goals.workout_days_per_week,
-      goal_type: blob.goals.goal_type,
-      target_weight_kg: blob.goals.target_weight_kg,
-    });
+  await supabase.from("goals").update({ is_active: false }).eq("user_id", userId);
+  await supabase.from("goals").insert({
+    user_id: userId,
+    is_active: true,
+    calorie_target: blob.goals.calorie_target,
+    protein_target_g: blob.goals.protein_target_g,
+    carb_target_g: blob.goals.carb_target_g,
+    fat_target_g: blob.goals.fat_target_g,
+    water_target_ml: blob.goals.water_target_ml,
+    creatine_target_g: blob.goals.creatine_target_g,
+    sleep_target_hours: blob.goals.sleep_target_hours,
+    workout_days_per_week: blob.goals.workout_days_per_week,
+    goal_type: blob.goals.goal_type,
+    target_weight_kg: blob.goals.target_weight_kg,
+  });
 
-    if (blob.meals.length) {
-      await supabase.from("meals").insert(
-        blob.meals.map((m) => ({
-          user_id: userId,
-          name: m.name,
-          category: m.category,
-          serving_amount: m.serving_amount,
-          calories: m.calories,
-          protein_g: m.protein_g,
-          carbs_g: m.carbs_g,
-          fat_g: m.fat_g,
-          notes: m.notes,
-          eaten_at: m.eaten_at,
-          is_estimate: m.is_estimate,
-          estimate_source: m.estimate_source,
-        })),
-      );
-    }
-
-    if (blob.metrics.length) {
-      await supabase.from("daily_metrics").upsert(
-        blob.metrics.map((m) => ({
-          user_id: userId,
-          metric_date: m.metric_date,
-          creatine_g: m.creatine_g,
-          creatine_taken: m.creatine_taken,
-          notes: m.notes,
-          sleep_hours: m.sleep_hours,
-          waist_cm: m.waist_cm,
-          water_ml: m.water_ml,
-          weight_kg: m.weight_kg,
-          workout_minutes: m.workout_minutes,
-          workout_type: m.workout_type,
-        })),
-        { onConflict: "user_id,metric_date" },
-      );
-    }
-  } finally {
-    clearGuest();
+  if (blob.meals.length) {
+    await supabase.from("meals").insert(
+      blob.meals.map((m) => ({
+        user_id: userId,
+        name: m.name,
+        category: m.category,
+        serving_amount: m.serving_amount,
+        calories: m.calories,
+        protein_g: m.protein_g,
+        carbs_g: m.carbs_g,
+        fat_g: m.fat_g,
+        notes: m.notes,
+        eaten_at: m.eaten_at,
+        is_estimate: m.is_estimate,
+        estimate_source: m.estimate_source,
+      })),
+    );
   }
+
+  if (blob.metrics.length) {
+    await supabase.from("daily_metrics").upsert(
+      blob.metrics.map((m) => ({
+        user_id: userId,
+        metric_date: m.metric_date,
+        creatine_g: m.creatine_g,
+        creatine_taken: m.creatine_taken,
+        notes: m.notes,
+        sleep_hours: m.sleep_hours,
+        waist_cm: m.waist_cm,
+        water_ml: m.water_ml,
+        weight_kg: m.weight_kg,
+        workout_minutes: m.workout_minutes,
+        workout_type: m.workout_type,
+      })),
+      { onConflict: "user_id,metric_date" },
+    );
+  }
+
+  if (blob.mealTemplates?.length) {
+    // Best-effort only: the meal_templates table may not exist yet on this
+    // Supabase project (migration not applied), which is an expected,
+    // documented state rather than a bug — a saved meal or two failing to
+    // carry over shouldn't block the rest of the (already-succeeded) migration
+    // or clear data that did migrate.
+    await supabase
+      .from("meal_templates")
+      .upsert(
+        blob.mealTemplates.map((t) => ({
+          user_id: userId,
+          name: t.name,
+          category: t.category,
+          serving_amount: t.serving_amount,
+          calories: t.calories,
+          protein_g: t.protein_g,
+          carbs_g: t.carbs_g,
+          fat_g: t.fat_g,
+          is_estimate: t.is_estimate,
+          estimate_source: t.estimate_source,
+        })),
+        { onConflict: "user_id,name" },
+      )
+      .then(
+        () => undefined,
+        () => undefined,
+      );
+  }
+
+  clearGuest();
   return true;
 }

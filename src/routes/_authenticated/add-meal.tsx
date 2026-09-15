@@ -1,11 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { format } from "date-fns";
-import { Camera, Check, RotateCcw, Sparkles, X } from "lucide-react";
+import {
+  Bookmark,
+  Camera,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Mic,
+  MicOff,
+  RotateCcw,
+  ScanLine,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 
 import { AppShell } from "@/components/app/AppShell";
+import {
+  BarcodeScannerDialog,
+  isBarcodeScanningSupported,
+} from "@/components/app/BarcodeScannerDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,24 +32,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
   useCreateMeal,
+  useDeleteMealTemplate,
+  useFrequentFoods,
   useMeal,
   useMealPhotoUrl,
   useRecentMeals,
+  useSaveMealTemplate,
+  useSavedMeals,
   useUpdateMeal,
+  type FrequentFood,
   type MealTemplate,
 } from "@/lib/data";
 import {
   analyzeMeal,
   parseServingToGrams,
   SERVING_SUGGESTIONS,
+  type EstimatedItem,
   type MacroEstimate,
 } from "@/lib/food-estimate";
 import { playSaveTone, triggerHaptic } from "@/lib/celebrationEffects";
-import { MEAL_CATEGORIES } from "@/lib/nutrition";
+import { MEAL_CATEGORIES, round } from "@/lib/nutrition";
 import { useSaveFeedback } from "@/lib/useSaveFeedback";
+import { useSpeechRecognition } from "@/lib/useSpeechRecognition";
 
 const searchSchema = z.object({ edit: z.string().optional() });
 
@@ -44,10 +68,14 @@ export const Route = createFileRoute("/_authenticated/add-meal")({
       { title: "Add Meal — MacroForge" },
       {
         name: "description",
-        content: "Log a meal with an optional photo, get an approximate macro estimate and correct it before saving.",
+        content:
+          "Log a meal with an optional photo, get an approximate macro estimate and correct it before saving.",
       },
       { property: "og:title", content: "Add Meal — MacroForge" },
-      { property: "og:description", content: "Photo-assisted meal logging with editable macro estimates." },
+      {
+        property: "og:description",
+        content: "Photo-assisted meal logging with editable macro estimates.",
+      },
     ],
   }),
   component: AddMeal,
@@ -82,6 +110,168 @@ function makeEmptyForm() {
   };
 }
 
+function QuickAddChip({
+  meal,
+  onClick,
+  onDelete,
+}: {
+  meal: MealTemplate;
+  onClick: () => void;
+  /** Only saved (user-curated) meals are deletable — recent/frequent chips are derived, not owned. */
+  onDelete?: () => void;
+}) {
+  return (
+    <span className="inline-flex items-center overflow-hidden rounded-full border border-border bg-card transition-colors hover:border-primary hover:bg-secondary">
+      <button type="button" onClick={onClick} className="px-3 py-1.5 text-left text-xs">
+        <span className="font-medium">{meal.name}</span>
+        <span className="text-muted-foreground">
+          {" · "}
+          {Math.round(meal.calories)} kcal
+          {meal.serving_amount ? ` · ${meal.serving_amount}` : ""}
+        </span>
+      </button>
+      {onDelete ? (
+        <button
+          type="button"
+          onClick={onDelete}
+          aria-label={`Remove saved meal ${meal.name}`}
+          className="pr-2.5 text-muted-foreground hover:text-destructive"
+        >
+          <X className="size-3" />
+        </button>
+      ) : null}
+    </span>
+  );
+}
+
+/**
+ * A single food (not a whole meal) — no macros shown, since tapping it fills
+ * the Food-name field and lets the normal auto-estimate produce fresh
+ * numbers, rather than replaying one past meal's combined totals.
+ */
+function FrequentFoodChip({ food, onClick }: { food: FrequentFood; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-full border border-border bg-card px-3 py-1.5 text-left text-xs capitalize transition-colors hover:border-primary hover:bg-secondary"
+    >
+      <span className="font-medium">{food.name}</span>
+      <span className="text-muted-foreground"> · logged {food.count}×</span>
+    </button>
+  );
+}
+
+/** One row of the itemized review list — shown only when a meal has more than one recognised food. */
+function ItemRow({
+  item,
+  expanded,
+  onToggleExpand,
+  onChange,
+  onRemove,
+}: {
+  item: EstimatedItem;
+  expanded: boolean;
+  onToggleExpand: () => void;
+  onChange: (patch: Partial<EstimatedItem>) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="rounded-md bg-secondary/60 p-2 text-xs">
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={onToggleExpand}
+          className="shrink-0 text-muted-foreground"
+          aria-expanded={expanded}
+          aria-label={`${expanded ? "Hide" : "Show"} carbs and fat for ${item.label}`}
+        >
+          {expanded ? (
+            <ChevronDown className="size-3.5" aria-hidden="true" />
+          ) : (
+            <ChevronRight className="size-3.5" aria-hidden="true" />
+          )}
+        </button>
+        <div className="min-w-0 flex-1">
+          <Input
+            value={item.label}
+            onChange={(e) => onChange({ label: e.target.value })}
+            aria-label="Food name"
+            className="h-6 w-full border-none bg-transparent px-1 font-medium shadow-none focus-visible:ring-1"
+          />
+          {item.grams != null || item.exact ? (
+            <span className="block px-1 text-[10px] text-muted-foreground">
+              {item.exact ? "from label" : `~${item.grams} g`}
+            </span>
+          ) : null}
+        </div>
+        <Input
+          type="number"
+          inputMode="decimal"
+          min="0"
+          step="1"
+          value={item.calories}
+          onChange={(e) => onChange({ calories: Number(e.target.value) || 0 })}
+          aria-label={`${item.label} calories`}
+          className="h-7 w-16 shrink-0 px-1.5 text-right text-xs"
+        />
+        <span className="shrink-0 text-[10px] text-muted-foreground">kcal</span>
+        <Input
+          type="number"
+          inputMode="decimal"
+          min="0"
+          step="0.1"
+          value={item.protein}
+          onChange={(e) => onChange({ protein: Number(e.target.value) || 0 })}
+          aria-label={`${item.label} protein`}
+          className="h-7 w-14 shrink-0 px-1.5 text-right text-xs"
+        />
+        <span className="shrink-0 text-[10px] text-muted-foreground">g P</span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-6 shrink-0"
+          aria-label={`Remove ${item.label}`}
+          onClick={onRemove}
+        >
+          <X className="size-3.5" />
+        </Button>
+      </div>
+      {expanded ? (
+        <div className="mt-2 grid grid-cols-2 gap-2 pl-5">
+          <div className="flex items-center gap-1.5">
+            <Label className="text-[10px] text-muted-foreground">Carbs (g)</Label>
+            <Input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.1"
+              value={item.carbs}
+              onChange={(e) => onChange({ carbs: Number(e.target.value) || 0 })}
+              aria-label={`${item.label} carbs`}
+              className="h-7 flex-1 px-1.5 text-right text-xs"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Label className="text-[10px] text-muted-foreground">Fat (g)</Label>
+            <Input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.1"
+              value={item.fat}
+              onChange={(e) => onChange({ fat: Number(e.target.value) || 0 })}
+              aria-label={`${item.label} fat`}
+              className="h-7 flex-1 px-1.5 text-right text-xs"
+            />
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function AddMeal() {
   const navigate = useNavigate();
   const { edit: editId } = Route.useSearch();
@@ -91,6 +281,17 @@ function AddMeal() {
   const update = useUpdateMeal();
   const editingMeal = useMeal(editId ?? null);
   const recent = useRecentMeals();
+  const [quickAddTab, setQuickAddTab] = useState<"recent" | "frequent" | "saved">("recent");
+  const frequent = useFrequentFoods(8, { enabled: quickAddTab === "frequent" });
+  // Unlike Frequent (an expensive 300-row scan + computation, worth deferring
+  // until asked for), Saved is a lean, user-owned table — fetched whenever
+  // this isn't an edit so the quick-add panel's visibility (which checks
+  // savedMeals.length) reflects reality even when the user has no recent
+  // meals yet but does have saved templates, instead of always reading as
+  // empty until they've already found the "saved" tab.
+  const saved = useSavedMeals({ enabled: !isEdit });
+  const saveMealTemplate = useSaveMealTemplate();
+  const deleteMealTemplate = useDeleteMealTemplate();
   const fileInput = useRef<HTMLInputElement>(null);
   const [justSaved, celebrate] = useSaveFeedback();
 
@@ -100,11 +301,23 @@ function AddMeal() {
   const existingPhoto = useMealPhotoUrl(existingPhotoPath);
   const [estimate, setEstimate] = useState<MacroEstimate | null>(null);
   const [estimating, setEstimating] = useState(false);
+  // Per-item breakdown of the current estimate, editable before saving. Only
+  // shown when there's more than one recognised food (see render below).
+  const [items, setItems] = useState<EstimatedItem[]>([]);
+  const [expandedItem, setExpandedItem] = useState<number | null>(null);
   // The edit id the form currently reflects — `undefined` until synced once.
   const [syncedId, setSyncedId] = useState<string | null | undefined>(undefined);
   // Which macro fields the user has typed into by hand. Auto-estimation never
   // overwrites these — only the manual "Re-estimate" button does.
   const [touched, setTouched] = useState<Record<MacroKey, boolean>>(NO_MACROS_TOUCHED);
+  // Read inside the debounced auto-estimate effect instead of depending on
+  // `touched` directly — depending on it would restart the debounce timer
+  // (and re-run analyzeMeal) on every hand-edit of a macro field, which would
+  // also clobber any itemized-list edits made in between.
+  const touchedRef = useRef(touched);
+  useEffect(() => {
+    touchedRef.current = touched;
+  }, [touched]);
   // When editing, the saved numbers stay put until the food name or serving is
   // changed — then the estimate takes over and re-adds every "+" item.
   const [descEdited, setDescEdited] = useState(false);
@@ -119,6 +332,34 @@ function AddMeal() {
       setTouched(NO_MACROS_TOUCHED);
     }
   }
+
+  // Voice logging: appends the transcript to whatever's already in the
+  // Food-name field (mirroring how a barcode scan appends, rather than
+  // replacing what the user typed or scanned before tapping the mic), so the
+  // existing auto-estimate effect below picks it up for free — no separate
+  // estimation path needed. Free, on-device, no server call; simply hidden
+  // on browsers without native speech recognition (notably iOS Safari), same
+  // graceful-degradation approach as every other best-effort feature in this
+  // app.
+  const speech = useSpeechRecognition(
+    (transcript) =>
+      editDescription({
+        name: form.name.trim() ? `${form.name.trim()} + ${transcript}` : transcript,
+      }),
+    (reason) =>
+      toast.error(
+        reason === "not-allowed"
+          ? "Microphone access was denied — check your browser's site permissions."
+          : reason === "no-speech"
+            ? "Didn't catch that — try again."
+            : "Voice input failed — you can still type the food name.",
+      ),
+  );
+
+  // Barcode scanning: feature-detected once (BarcodeDetector isn't in Safari/
+  // iOS/Firefox) rather than on every render.
+  const [barcodeSupported] = useState(isBarcodeScanningSupported);
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   const targetId = editId ?? null;
   const ready = syncedId === targetId;
@@ -151,6 +392,8 @@ function AddMeal() {
     setPhoto(null);
     setPhotoUrl(null);
     setEstimate(null);
+    setItems([]);
+    setExpandedItem(null);
     setSyncedId(targetId);
   }, [ready, isEdit, targetId, editingMeal.data]);
 
@@ -180,7 +423,52 @@ function AddMeal() {
     }));
     setTouched(ALL_MACROS_TOUCHED);
     setEstimate(null);
+    setItems([]);
+    setExpandedItem(null);
     toast.success(`Loaded "${t.name}" — edit anything before saving`);
+  }
+
+  // A frequent food isn't a saved meal with known macros — it's just a name.
+  // Put it in the Food-name field exactly as if the user had typed it, so the
+  // normal auto-estimate below produces a fresh estimate rather than
+  // replaying one past meal's combined totals.
+  function applyFrequentFood(food: FrequentFood) {
+    editDescription({ name: food.name });
+  }
+
+  // Saves the form's current values as a reusable template, under the food
+  // name already typed — no separate naming step, so it stays one tap from
+  // an already-filled form. Saving again under the same name replaces it.
+  async function saveAsTemplate() {
+    if (!form.name.trim()) {
+      toast.error("Add a food name first.");
+      return;
+    }
+    try {
+      await saveMealTemplate.mutateAsync({
+        name: form.name.trim(),
+        category: form.category,
+        serving_amount: form.serving_amount.trim() || null,
+        calories: Number(form.calories || 0),
+        protein_g: Number(form.protein_g || 0),
+        carbs_g: Number(form.carbs_g || 0),
+        fat_g: Number(form.fat_g || 0),
+        is_estimate: estimate !== null,
+        estimate_source: estimate?.source ?? null,
+      });
+      toast.success(`Saved "${form.name.trim()}" for quick logging later`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save this meal");
+    }
+  }
+
+  async function removeSavedMeal(name: string) {
+    try {
+      await deleteMealTemplate.mutateAsync(name);
+      toast.success(`Removed "${name}"`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not remove that saved meal");
+    }
   }
 
   // Auto-estimate: whenever there's a food name, fill calories/macros with an
@@ -202,13 +490,23 @@ function AddMeal() {
           photo,
         });
         if (!result) return;
-        setEstimate(result);
+        const t = touchedRef.current;
+        // All four totals already hand-set (e.g. a scanned item's exact
+        // macros, or a manual itemized edit) means this re-estimate would
+        // only replace a real breakdown with a rough guess for the food name
+        // as a whole — skip it and leave the existing items/estimate alone.
+        const allTouched = t.calories && t.protein_g && t.carbs_g && t.fat_g;
+        if (!allTouched) {
+          setEstimate(result);
+          setItems(result.items ?? []);
+          setExpandedItem(null);
+        }
         setForm((s) => ({
           ...s,
-          calories: touched.calories ? s.calories : String(result.calories),
-          protein_g: touched.protein_g ? s.protein_g : String(result.protein),
-          carbs_g: touched.carbs_g ? s.carbs_g : String(result.carbs),
-          fat_g: touched.fat_g ? s.fat_g : String(result.fat),
+          calories: t.calories ? s.calories : String(result.calories),
+          protein_g: t.protein_g ? s.protein_g : String(result.protein),
+          carbs_g: t.carbs_g ? s.carbs_g : String(result.carbs),
+          fat_g: t.fat_g ? s.fat_g : String(result.fat),
         }));
       } finally {
         setEstimating(false);
@@ -216,7 +514,10 @@ function AddMeal() {
     }, 600);
 
     return () => window.clearTimeout(handle);
-  }, [form.name, form.serving_amount, photo, touched, ready, isEdit, descEdited]);
+    // touched is intentionally excluded — read via touchedRef instead, so a
+    // hand-edit of a total field doesn't restart this debounce/re-fetch (which
+    // would also blow away any itemized-list edits made in the meantime).
+  }, [form.name, form.serving_amount, photo, ready, isEdit, descEdited]);
 
   async function estimateMacros() {
     if (!form.name.trim() && !photo) {
@@ -235,6 +536,8 @@ function AddMeal() {
         return;
       }
       setEstimate(result);
+      setItems(result.items ?? []);
+      setExpandedItem(null);
       // Manual re-estimate overrides everything, including hand-edited fields.
       setTouched(NO_MACROS_TOUCHED);
       setDescEdited(true);
@@ -249,6 +552,64 @@ function AddMeal() {
     } finally {
       setEstimating(false);
     }
+  }
+
+  // Item edits are the primary way to correct a multi-food estimate — they
+  // recompute and write the same total fields the single-item form always
+  // had, so save behavior is unchanged either way.
+  function syncTotalsFromItems(nextItems: EstimatedItem[]) {
+    const sum = nextItems.reduce(
+      (acc, it) => ({
+        calories: acc.calories + it.calories,
+        protein: acc.protein + it.protein,
+        carbs: acc.carbs + it.carbs,
+        fat: acc.fat + it.fat,
+      }),
+      { calories: 0, protein: 0, carbs: 0, fat: 0 },
+    );
+    setForm((s) => ({
+      ...s,
+      calories: String(Math.round(sum.calories)),
+      protein_g: String(round(sum.protein, 1)),
+      carbs_g: String(round(sum.carbs, 1)),
+      fat_g: String(round(sum.fat, 1)),
+    }));
+    setTouched(ALL_MACROS_TOUCHED);
+  }
+
+  function updateItem(index: number, patch: Partial<EstimatedItem>) {
+    setItems((current) => {
+      const next = current.map((it, i) => (i === index ? { ...it, ...patch } : it));
+      syncTotalsFromItems(next);
+      return next;
+    });
+  }
+
+  function removeItem(index: number) {
+    setItems((current) => {
+      const next = current.filter((_, i) => i !== index);
+      syncTotalsFromItems(next);
+      return next;
+    });
+    setExpandedItem(null);
+  }
+
+  // A scanned product is exact (from its own label), not an approximation —
+  // added straight to the item list rather than routed through the
+  // auto-estimate text pipeline. Appends to whatever's already there, so
+  // scanning a second item after typing/scanning a first just adds to the
+  // same meal instead of replacing it.
+  function addScannedItem(item: EstimatedItem) {
+    setItems((current) => {
+      const next = [...current, item];
+      syncTotalsFromItems(next);
+      return next;
+    });
+    setForm((s) => ({
+      ...s,
+      name: s.name.trim() ? `${s.name.trim()} + ${item.label}` : item.label,
+    }));
+    toast.success(`Added "${item.label}"`);
   }
 
   async function submit(e: React.FormEvent) {
@@ -323,34 +684,100 @@ function AddMeal() {
   ];
 
   const autoFilled = estimate !== null && !Object.values(touched).every(Boolean);
-  const previewUrl = photoUrl ?? (existingPhotoPath ? existingPhoto.data ?? null : null);
+  const previewUrl = photoUrl ?? (existingPhotoPath ? (existingPhoto.data ?? null) : null);
   const saving = create.isPending || update.isPending;
   const recentMeals = recent.data ?? [];
+  const frequentFoods = frequent.data ?? [];
+  const savedMeals = saved.data ?? [];
+  const TAB_LABEL: Record<typeof quickAddTab, string> = {
+    recent: "Repeat a recent meal",
+    frequent: "Foods you log often",
+    saved: "Your saved meals",
+  };
 
   return (
     <AppShell
       title={isEdit ? "Edit Meal" : "Add Meal"}
-      subtitle={isEdit ? "Update anything and save" : "Photo optional · every estimate stays editable"}
+      subtitle={
+        isEdit ? "Update anything and save" : "Photo optional · every estimate stays editable"
+      }
     >
-      {!isEdit && recentMeals.length > 0 ? (
+      {barcodeSupported ? (
+        <BarcodeScannerDialog
+          open={scannerOpen}
+          onOpenChange={setScannerOpen}
+          onDetected={addScannedItem}
+        />
+      ) : null}
+
+      {!isEdit && (recentMeals.length > 0 || savedMeals.length > 0) ? (
         <div className="panel mb-4 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Repeat a recent meal</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {TAB_LABEL[quickAddTab]}
+            </p>
+            <div
+              role="tablist"
+              aria-label="Quick add source"
+              className="inline-flex shrink-0 rounded-full border border-border bg-secondary p-0.5 text-[11px]"
+            >
+              {(["recent", "frequent", "saved"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  role="tab"
+                  aria-selected={quickAddTab === tab}
+                  onClick={() => setQuickAddTab(tab)}
+                  className={`rounded-full px-2.5 py-1 font-medium capitalize transition-colors ${
+                    quickAddTab === tab
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="mt-2 flex flex-wrap gap-2">
-            {recentMeals.map((t) => (
-              <button
-                key={t.name}
-                type="button"
-                onClick={() => applyTemplate(t)}
-                className="rounded-full border border-border bg-card px-3 py-1.5 text-left text-xs transition-colors hover:border-primary hover:bg-secondary"
-              >
-                <span className="font-medium">{t.name}</span>
-                <span className="text-muted-foreground">
-                  {" · "}
-                  {Math.round(t.calories)} kcal
-                  {t.serving_amount ? ` · ${t.serving_amount}` : ""}
-                </span>
-              </button>
-            ))}
+            {quickAddTab === "recent" ? (
+              recentMeals.map((t) => (
+                <QuickAddChip key={t.name} meal={t} onClick={() => applyTemplate(t)} />
+              ))
+            ) : quickAddTab === "frequent" ? (
+              frequent.isLoading ? (
+                <Skeleton className="h-7 w-40 rounded-full" />
+              ) : frequentFoods.length > 0 ? (
+                frequentFoods.map((food) => (
+                  <FrequentFoodChip
+                    key={food.name}
+                    food={food}
+                    onClick={() => applyFrequentFood(food)}
+                  />
+                ))
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Log a meal a couple of times to see it here.
+                </p>
+              )
+            ) : saved.isLoading ? (
+              <Skeleton className="h-7 w-40 rounded-full" />
+            ) : saved.isError ? (
+              <p className="text-xs text-muted-foreground">Saved meals aren't set up yet.</p>
+            ) : savedMeals.length > 0 ? (
+              savedMeals.map((t) => (
+                <QuickAddChip
+                  key={t.name}
+                  meal={t}
+                  onClick={() => applyTemplate(t)}
+                  onDelete={() => removeSavedMeal(t.name)}
+                />
+              ))
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Save a meal from the form below to see it here.
+              </p>
+            )}
           </div>
         </div>
       ) : null}
@@ -371,7 +798,11 @@ function AddMeal() {
           />
           {previewUrl ? (
             <div className="relative mt-3">
-              <img src={previewUrl} alt="Selected meal" className="aspect-square w-full rounded-xl object-cover" />
+              <img
+                src={previewUrl}
+                alt="Selected meal"
+                className="aspect-square w-full rounded-xl object-cover"
+              />
               <Button
                 type="button"
                 size="icon"
@@ -393,14 +824,25 @@ function AddMeal() {
               Take or upload a food photo
             </button>
           )}
-          <Button type="button" variant="secondary" className="mt-3 w-full" onClick={estimateMacros} disabled={estimating}>
+          <Button
+            type="button"
+            variant="secondary"
+            className="mt-3 w-full"
+            onClick={estimateMacros}
+            disabled={estimating}
+          >
             <Sparkles className="size-4" />{" "}
-            {estimating ? "Estimating…" : estimate ? "Re-estimate calories & macros" : "Estimate calories & macros"}
+            {estimating
+              ? "Estimating…"
+              : estimate
+                ? "Re-estimate calories & macros"
+                : "Estimate calories & macros"}
           </Button>
           <p className="mt-3 rounded-lg bg-secondary p-3 text-xs text-muted-foreground">
-            Calories and macros fill in <strong>automatically</strong> from your food name and serving size — or from a{" "}
-            <strong>photo</strong> when photo analysis is enabled. They are <strong>approximate</strong>, not measured —
-            edit any number and your value is kept. Separate several foods with <strong>+</strong> and each is added up.
+            Calories and macros fill in <strong>automatically</strong> from your food name and
+            serving size — or from a <strong>photo</strong> when photo analysis is enabled. They are{" "}
+            <strong>approximate</strong>, not measured — edit any number and your value is kept.
+            Separate several foods with <strong>+</strong> and each is added up.
           </p>
           {estimate ? (
             <p className="mt-2 text-xs text-primary">
@@ -411,23 +853,74 @@ function AddMeal() {
 
         <section className="panel space-y-4 p-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Food name</Label>
-            <Input
-              id="name"
-              required
-              placeholder="Grilled chicken breast + rice + salad"
-              value={form.name}
-              onChange={(e) => editDescription({ name: e.target.value })}
-            />
+            <div className="flex items-center justify-between">
+              <Label htmlFor="name">Food name</Label>
+              <div className="flex items-center gap-1">
+                {barcodeSupported ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 gap-1 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                    onClick={() => setScannerOpen(true)}
+                  >
+                    <ScanLine className="size-3" aria-hidden="true" />
+                    Scan barcode
+                  </Button>
+                ) : null}
+                {!isEdit ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 gap-1 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                    onClick={saveAsTemplate}
+                    disabled={saveMealTemplate.isPending}
+                  >
+                    <Bookmark className="size-3" aria-hidden="true" />
+                    Save for later
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+            <div className="relative">
+              <Input
+                id="name"
+                required
+                placeholder="Grilled chicken breast + rice + salad"
+                value={form.name}
+                onChange={(e) => editDescription({ name: e.target.value })}
+                className={speech.supported ? "pr-10" : undefined}
+              />
+              {speech.supported ? (
+                <button
+                  type="button"
+                  onClick={() => (speech.listening ? speech.stop() : speech.start())}
+                  aria-label={speech.listening ? "Stop voice input" : "Add food by voice"}
+                  aria-pressed={speech.listening}
+                  className={`absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 transition-colors ${
+                    speech.listening
+                      ? "animate-pulse text-destructive"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {speech.listening ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+                </button>
+              ) : null}
+            </div>
             <p className="text-[11px] text-muted-foreground">
-              List everything you ate, separated by <strong>+</strong> — e.g. “2 eggs + toast + 1 apple”. Each item is
-              estimated and added up.
+              List everything you ate, separated by <strong>+</strong> — e.g. “2 eggs + toast + 1
+              apple”. Each item is estimated and added up.
+              {speech.supported ? " Or tap the mic and say it." : ""}
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="category">Category</Label>
-              <Select value={form.category} onValueChange={(v) => setForm((s) => ({ ...s, category: v }))}>
+              <Select
+                value={form.category}
+                onValueChange={(v) => setForm((s) => ({ ...s, category: v }))}
+              >
                 <SelectTrigger id="category">
                   <SelectValue />
                 </SelectTrigger>
@@ -477,6 +970,26 @@ function AddMeal() {
                 </span>
               ) : null}
             </div>
+            {items.length > 1 ? (
+              <div className="space-y-1.5 rounded-lg border border-dashed border-border p-2.5">
+                {items.map((item, index) => (
+                  <ItemRow
+                    key={index}
+                    item={item}
+                    expanded={expandedItem === index}
+                    onToggleExpand={() => setExpandedItem((cur) => (cur === index ? null : index))}
+                    onChange={(patch) => updateItem(index, patch)}
+                    onRemove={() => removeItem(index)}
+                  />
+                ))}
+                <p className="pt-0.5 text-[11px] text-muted-foreground">
+                  Edit any item above — the total below updates automatically.
+                </p>
+              </div>
+            ) : null}
+            {items.length > 1 ? (
+              <p className="text-xs font-semibold text-muted-foreground">Total</p>
+            ) : null}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {macroFields.map((f) => (
                 <div key={f.key} className="space-y-2">

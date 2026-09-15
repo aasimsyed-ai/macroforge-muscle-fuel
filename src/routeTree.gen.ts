@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedAddMealRouteImport } from './routes/_authenticated/add-meal'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedLogWorkoutRouteImport } from './routes/_authenticated/log-workout'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 
 const IndexRoute = IndexRouteImport.update({
@@ -40,6 +41,11 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedLogWorkoutRoute = AuthenticatedLogWorkoutRouteImport.update({
+  id: '/log-workout',
+  path: '/log-workout',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -51,6 +57,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/add-meal': typeof AuthenticatedAddMealRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/log-workout': typeof AuthenticatedLogWorkoutRoute
   '/settings': typeof AuthenticatedSettingsRoute
 }
 export interface FileRoutesByTo {
@@ -58,6 +65,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/add-meal': typeof AuthenticatedAddMealRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/log-workout': typeof AuthenticatedLogWorkoutRoute
   '/settings': typeof AuthenticatedSettingsRoute
 }
 export interface FileRoutesById {
@@ -67,13 +75,15 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/add-meal': typeof AuthenticatedAddMealRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/log-workout': typeof AuthenticatedLogWorkoutRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/add-meal' | '/dashboard' | '/settings'
+  fullPaths:
+    '/' | '/auth' | '/add-meal' | '/dashboard' | '/log-workout' | '/settings'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/add-meal' | '/dashboard' | '/settings'
+  to: '/' | '/auth' | '/add-meal' | '/dashboard' | '/log-workout' | '/settings'
   id:
     | '__root__'
     | '/'
@@ -81,6 +91,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/add-meal'
     | '/_authenticated/dashboard'
+    | '/_authenticated/log-workout'
     | '/_authenticated/settings'
   fileRoutesById: FileRoutesById
 }
@@ -127,6 +138,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/log-workout': {
+      id: '/_authenticated/log-workout'
+      path: '/log-workout'
+      fullPath: '/log-workout'
+      preLoaderRoute: typeof AuthenticatedLogWorkoutRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/settings': {
       id: '/_authenticated/settings'
       path: '/settings'
@@ -140,12 +158,14 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAddMealRoute: typeof AuthenticatedAddMealRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedLogWorkoutRoute: typeof AuthenticatedLogWorkoutRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAddMealRoute: AuthenticatedAddMealRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedLogWorkoutRoute: AuthenticatedLogWorkoutRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
 }
 

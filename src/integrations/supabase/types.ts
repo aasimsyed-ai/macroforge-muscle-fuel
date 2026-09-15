@@ -179,6 +179,54 @@ export type Database = {
         }
         Relationships: []
       }
+      meal_templates: {
+        Row: {
+          calories: number
+          carbs_g: number
+          category: string
+          created_at: string
+          estimate_source: string | null
+          fat_g: number
+          id: string
+          is_estimate: boolean
+          name: string
+          protein_g: number
+          serving_amount: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          calories?: number
+          carbs_g?: number
+          category?: string
+          created_at?: string
+          estimate_source?: string | null
+          fat_g?: number
+          id?: string
+          is_estimate?: boolean
+          name: string
+          protein_g?: number
+          serving_amount?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          calories?: number
+          carbs_g?: number
+          category?: string
+          created_at?: string
+          estimate_source?: string | null
+          fat_g?: number
+          id?: string
+          is_estimate?: boolean
+          name?: string
+          protein_g?: number
+          serving_amount?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           age: number | null
