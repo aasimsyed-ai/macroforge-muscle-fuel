@@ -60,7 +60,10 @@ export function useReplaceWorkout() {
 }
 
 /** Progressive-overload board for one period, always vs. the period right before it. */
-export function useExerciseProgressBoard(period: ProgressBoardPeriod) {
+export function useExerciseProgressBoard(
+  period: ProgressBoardPeriod,
+  options?: { enabled?: boolean },
+) {
   // Stable within a render pass; recomputed only when the period changes (or
   // on remount), which is what determines the query key/refetch anyway.
   const window = useMemo(() => resolveProgressBoardWindow(period, new Date()), [period]);
@@ -73,6 +76,7 @@ export function useExerciseProgressBoard(period: ProgressBoardPeriod) {
       window.previousFrom,
       window.previousTo,
     ],
+    enabled: options?.enabled ?? true,
     queryFn: () =>
       api.fetchExerciseProgressBoard(
         window.currentFrom,

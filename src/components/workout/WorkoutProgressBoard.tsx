@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { HelpCircle, Minus, TrendingDown, TrendingUp } from "lucide-react";
 
+import { SectionGuide } from "@/components/app/SectionGuide";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -52,9 +53,12 @@ export function WorkoutProgressBoard() {
   return (
     <div className="panel p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="text-sm font-semibold">Progressive overload</p>
-          <p className="text-xs text-muted-foreground">{window.label}</p>
+        <div className="flex items-center gap-1">
+          <div>
+            <p className="text-sm font-semibold">Progressive overload</p>
+            <p className="text-xs text-muted-foreground">{window.label}</p>
+          </div>
+          <SectionGuide section="progress" />
         </div>
         <div className="flex gap-1 rounded-md bg-secondary p-1 text-xs">
           {PERIODS.map((item) => (

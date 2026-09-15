@@ -4,6 +4,7 @@ import { BarChart3, CirclePlus, Dumbbell, Flame, LogOut, Settings } from "lucide
 import type { ReactNode } from "react";
 
 import { NotificationBell } from "@/components/workout/NotificationBell";
+import { HalkuPanel } from "@/components/halku/HalkuPanel";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { TRIAL_DAYS, guestActive, guestDayNumber } from "@/lib/guest";
@@ -93,6 +94,8 @@ export function AppShell({ title, subtitle, children }: { title: string; subtitl
           ))}
         </ul>
       </nav>
+
+      <HalkuPanel />
     </div>
   );
 }

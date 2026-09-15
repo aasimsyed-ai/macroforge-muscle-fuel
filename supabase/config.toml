@@ -9,3 +9,10 @@ verify_jwt = false
 # subscriptions, so this keeps the default JWT verification on.
 [functions.send-push]
 verify_jwt = true
+
+# Halku (personal AI trainer) — available to guests too (general fitness/
+# nutrition questions), and any personal data it grounds an answer in is sent
+# in the request body by the already-authenticated client, not looked up
+# server-side, so it doesn't need a Supabase JWT either.
+[functions.halku-chat]
+verify_jwt = false

@@ -11,6 +11,7 @@ import { DayCelebration } from "@/components/app/DayCelebration";
 import { MealList } from "@/components/app/MealList";
 import { MetricsQuickLog } from "@/components/app/MetricsQuickLog";
 import { OnboardingIntro } from "@/components/app/OnboardingIntro";
+import { SectionGuide } from "@/components/app/SectionGuide";
 import { ProgressRing } from "@/components/app/ProgressRing";
 import { StatCard } from "@/components/app/StatCard";
 import { StreakBadges } from "@/components/app/StreakBadges";
@@ -253,8 +254,9 @@ function Dashboard() {
         </div>
       ) : null}
 
-      <div className="mb-3">
+      <div className="mb-3 flex items-center gap-1">
         <TrackingModeToggle mode={trackingMode} onChange={setTrackingMode} />
+        <SectionGuide section={trackingMode === "workout" ? "workout" : "food"} />
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
