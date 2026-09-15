@@ -59,26 +59,59 @@ export function classifyHalkuQuestion(raw: string): HalkuIntent {
   if (includesAny(text, ["rir", "rpe"])) {
     return { kind: "define_rir_rpe" };
   }
-  if (includesAny(text, ["what are sets", "sets and reps", "what is a rep", "what are reps", "what is a set"])) {
+  if (
+    includesAny(text, [
+      "what are sets",
+      "sets and reps",
+      "what is a rep",
+      "what are reps",
+      "what is a set",
+    ])
+  ) {
     return { kind: "define_sets_reps" };
   }
   if (includesAny(text, ["rest between", "how long should i rest", "what is rest", "rest time"])) {
     return { kind: "define_rest" };
   }
   if (
-    includesAny(text, ["what should i enter for weight", "what does weight mean", "what is the weight field"]) ||
+    includesAny(text, [
+      "what should i enter for weight",
+      "what does weight mean",
+      "what is the weight field",
+    ]) ||
     (text.includes("weight") && text.includes("enter"))
   ) {
     return { kind: "define_weight_field" };
   }
-  if (includesAny(text, ["homemade", "home cooked", "home-cooked", "own recipe", "log homemade", "cooked at home"])) {
+  if (
+    includesAny(text, [
+      "homemade",
+      "home cooked",
+      "home-cooked",
+      "own recipe",
+      "log homemade",
+      "cooked at home",
+    ])
+  ) {
     return { kind: "how_to_log_homemade_food" };
   }
   if (includesAny(text, ["protein target", "protein goal", "why is my protein"])) {
     return { kind: "why_protein_target" };
   }
-  if (includesAny(text, ["progress", "progression", "increase", "recommend", "why didn't you", "why did my"])) {
-    return { kind: "why_progression_status", muscleGroupHint: extractMuscleGroupHint(text) };
+  if (
+    includesAny(text, [
+      "progress",
+      "progression",
+      "increase",
+      "recommend",
+      "why didn't you",
+      "why did my",
+    ])
+  ) {
+    const muscleGroupHint = extractMuscleGroupHint(text);
+    return muscleGroupHint
+      ? { kind: "why_progression_status", muscleGroupHint }
+      : { kind: "why_progression_status" };
   }
   if (includesAny(text, [" hi ", " hello", "hey halku", "hey there"]) && raw.trim().length < 20) {
     return { kind: "greeting" };
@@ -135,7 +168,7 @@ export function buildHalkuAnswer(intent: HalkuIntent, data: HalkuKnownData): Hal
       }
       return {
         grounded: false,
-        text: 'Your protein target comes from your goal and body weight, set in Settings — muscle building typically needs more protein per kg than just maintaining weight. You can change it in Settings any time.',
+        text: "Your protein target comes from your goal and body weight, set in Settings — muscle building typically needs more protein per kg than just maintaining weight. You can change it in Settings any time.",
       };
     case "why_progression_status": {
       const rows = data.progressRows ?? [];

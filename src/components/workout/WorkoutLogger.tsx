@@ -89,10 +89,18 @@ export function WorkoutLogger({
         initialData?.draft.maxHeartRate != null),
   );
   const [copyingSessionId, setCopyingSessionId] = useState<string | null>(null);
-  // Bumped whenever `draft.exercises` is replaced wholesale (copy-from-previous,
-  // post-save reset) so exercise/set rows remount and drop stale local UI state
-  // (e.g. a weight input's "custom vs preset" toggle) instead of reusing it by index.
-  const [draftVersion, setDraftVersion] = useState(0);
+  // Stable per-exercise React keys, independent of array position. Without
+  // this, removing exercise N shifts every later exercise's index-based key,
+  // remounting them and silently resetting their collapse/expanded-set UI
+  // state (not their data — that lives in `draft`, untouched) even though
+  // nothing about those exercises actually changed. Replacing `draft.exercises`
+  // wholesale (copy-from-previous, post-save reset) regenerates every key too,
+  // so those rows still remount and drop stale local UI state on purpose (e.g.
+  // a weight input's "custom vs preset" toggle).
+  const nextExerciseKey = useRef(1);
+  const [exerciseKeys, setExerciseKeys] = useState<number[]>(() =>
+    draft.exercises.map(() => nextExerciseKey.current++),
+  );
   // Editing a saved session already has its own training phase — don't let the
   // "apply my default phase" effect below silently overwrite it.
   const phaseTouched = useRef(isEditing);
@@ -135,6 +143,7 @@ export function WorkoutLogger({
 
   function addExercise() {
     setDraft((current) => ({ ...current, exercises: [...current.exercises, newExerciseDraft()] }));
+    setExerciseKeys((current) => [...current, nextExerciseKey.current++]);
   }
 
   async function copyFromSession(sessionId: string) {
@@ -148,7 +157,7 @@ export function WorkoutLogger({
       }
       const exercises = workoutApi.sessionDetailToExerciseDrafts(detail);
       setDraft((current) => ({ ...current, exercises }));
-      setDraftVersion((v) => v + 1);
+      setExerciseKeys(exercises.map(() => nextExerciseKey.current++));
       toast.success("Loaded — update the weights and save.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not load that workout.");
@@ -165,6 +174,9 @@ export function WorkoutLogger({
           ? current.exercises.filter((_, i) => i !== index)
           : current.exercises,
     }));
+    setExerciseKeys((current) =>
+      current.length > 1 ? current.filter((_, i) => i !== index) : current,
+    );
   }
 
   async function submit(event: React.FormEvent) {
@@ -200,7 +212,7 @@ export function WorkoutLogger({
           moved > 0 ? `Workout logged ✓ · ${moved.toLocaleString()} kg moved` : "Workout logged ✓",
         );
         setDraft(initialDraft());
-        setDraftVersion((v) => v + 1);
+        setExerciseKeys([nextExerciseKey.current++]);
         phaseTouched.current = false;
       }
       playSaveTone();
@@ -334,7 +346,7 @@ export function WorkoutLogger({
         </div>
         {draft.exercises.map((exercise, index) => (
           <WorkoutExerciseForm
-            key={`${draftVersion}-${index}`}
+            key={exerciseKeys[index] ?? index}
             index={index}
             exercise={exercise}
             catalog={catalog.data ?? []}
