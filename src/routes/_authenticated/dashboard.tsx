@@ -10,6 +10,7 @@ import { DailyCompletionCard } from "@/components/app/DailyCompletionCard";
 import { DayCelebration } from "@/components/app/DayCelebration";
 import { MealList } from "@/components/app/MealList";
 import { MetricsQuickLog } from "@/components/app/MetricsQuickLog";
+import { OnboardingIntro } from "@/components/app/OnboardingIntro";
 import { ProgressRing } from "@/components/app/ProgressRing";
 import { StatCard } from "@/components/app/StatCard";
 import { StreakBadges } from "@/components/app/StreakBadges";
@@ -245,6 +246,8 @@ function Dashboard() {
       title="Dashboard"
       subtitle={`${range.label} · ${latestWeight ? `${latestWeight} kg` : "no weigh-in yet"} → ${goals.target_weight_kg} kg goal`}
     >
+      <OnboardingIntro />
+
       {milestoneBurstKey > 0 ? (
         <div className="pointer-events-none fixed left-1/2 top-24 z-50 -translate-x-1/2" aria-hidden="true">
           <DayCelebration key={milestoneBurstKey} />
