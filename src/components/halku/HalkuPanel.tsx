@@ -117,7 +117,13 @@ export function HalkuPanel() {
                   Ask about anything in the app, or your own progress.
                 </p>
               </div>
-              <Button type="button" variant="ghost" size="sm" onClick={toggleGender} className="shrink-0 text-xs">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={toggleGender}
+                className="shrink-0 text-xs"
+              >
                 {gender === "masculine" ? "Masc." : "Fem."}
               </Button>
             </div>
@@ -135,9 +141,7 @@ export function HalkuPanel() {
                 <div
                   key={message.id}
                   className={`rounded-lg p-2 text-xs ${
-                    message.role === "user"
-                      ? "ml-6 bg-primary/15 text-right"
-                      : "mr-6 bg-card"
+                    message.role === "user" ? "ml-6 bg-primary/15 text-right" : "mr-6 bg-card"
                   }`}
                 >
                   {message.role === "halku" && message.grounded ? (
@@ -149,7 +153,9 @@ export function HalkuPanel() {
                 </div>
               ))
             )}
-            {sending ? <p className="p-2 text-xs text-muted-foreground">Halku is thinking…</p> : null}
+            {sending ? (
+              <p className="p-2 text-xs text-muted-foreground">Halku is thinking…</p>
+            ) : null}
           </div>
 
           {messages.length === 0 ? (
@@ -186,7 +192,8 @@ export function HalkuPanel() {
             </Button>
           </form>
           <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
-            <Sparkles className="size-3" aria-hidden="true" /> Halku never invents your workout or food data.
+            <Sparkles className="size-3" aria-hidden="true" /> Halku never invents your workout or
+            food data.
           </p>
         </DialogContent>
       </Dialog>

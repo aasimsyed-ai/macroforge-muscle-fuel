@@ -66,7 +66,8 @@ export function WorkoutDashboard({
               bodyWeightKg={bodyWeightKg}
               onSaved={() => {
                 setLogging(false);
-                if (prefsData) runWorkoutNotifications(prefsData, { force: true }).catch(() => undefined);
+                if (prefsData)
+                  runWorkoutNotifications(prefsData, { force: true }).catch(() => undefined);
               }}
               onCancel={() => setLogging(false)}
             />

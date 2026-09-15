@@ -402,7 +402,9 @@ export function WorkoutExerciseForm({
                               <Check
                                 className={cn(
                                   "size-4",
-                                  exercise.exerciseName === recent.name ? "opacity-100" : "opacity-0",
+                                  exercise.exerciseName === recent.name
+                                    ? "opacity-100"
+                                    : "opacity-0",
                                 )}
                               />
                               {recent.name}
@@ -410,7 +412,8 @@ export function WorkoutExerciseForm({
                           ))}
                         </CommandGroup>
                       ) : null}
-                      {exerciseQuery.trim() && !knownNames.has(exerciseQuery.trim().toLowerCase()) ? (
+                      {exerciseQuery.trim() &&
+                      !knownNames.has(exerciseQuery.trim().toLowerCase()) ? (
                         <CommandGroup>
                           <CommandItem
                             value={`__create__${exerciseQuery}`}

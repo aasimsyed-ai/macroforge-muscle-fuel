@@ -18,7 +18,12 @@ function MealPhoto({ path }: { path: string | null }) {
     );
   }
   return url ? (
-    <img src={url} alt="Meal photo" loading="lazy" className="size-14 shrink-0 rounded-lg object-cover" />
+    <img
+      src={url}
+      alt="Meal photo"
+      loading="lazy"
+      className="size-14 shrink-0 rounded-lg object-cover"
+    />
   ) : (
     <div className="size-14 shrink-0 animate-pulse rounded-lg bg-secondary" />
   );
@@ -58,8 +63,8 @@ export function MealList({ meals }: { meals: Meal[] }) {
               {m.is_demo ? <Badge variant="outline">Demo</Badge> : null}
             </div>
             <p className="num mt-1 text-sm text-muted-foreground">
-              {Math.round(Number(m.calories))} kcal · P {Number(m.protein_g)}g · C {Number(m.carbs_g)}g · F{" "}
-              {Number(m.fat_g)}g
+              {Math.round(Number(m.calories))} kcal · P {Number(m.protein_g)}g · C{" "}
+              {Number(m.carbs_g)}g · F {Number(m.fat_g)}g
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
               {format(new Date(m.eaten_at), "EEE d MMM, HH:mm")}

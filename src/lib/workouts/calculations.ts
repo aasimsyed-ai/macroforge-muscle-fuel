@@ -8,11 +8,7 @@ export function calculateSetVolume(
     return 0;
   }
 
-  if (
-    set.weightMode === "bodyweight" ||
-    set.weightKg === null ||
-    !Number.isFinite(set.weightKg)
-  ) {
+  if (set.weightMode === "bodyweight" || set.weightKg === null || !Number.isFinite(set.weightKg)) {
     return 0;
   }
 
@@ -307,12 +303,14 @@ export function summarizeExercisePeriod(
   const totalVolume = completed.reduce((sum, set) => sum + calculateSetVolume(set), 0);
 
   const weighted = completed.filter(
-    (set) => set.weightMode !== "bodyweight" && set.weightKg !== null && Number.isFinite(set.weightKg),
+    (set) =>
+      set.weightMode !== "bodyweight" && set.weightKg !== null && Number.isFinite(set.weightKg),
   );
   const topWeightKg = weighted.length
     ? Math.max(...weighted.map((set) => set.weightKg as number))
     : null;
-  const atTopWeight = topWeightKg !== null ? weighted.filter((set) => set.weightKg === topWeightKg) : [];
+  const atTopWeight =
+    topWeightKg !== null ? weighted.filter((set) => set.weightKg === topWeightKg) : [];
   const repsAtTopWeight = atTopWeight.length
     ? round1(atTopWeight.reduce((sum, set) => sum + set.reps, 0) / atTopWeight.length)
     : null;
@@ -328,7 +326,8 @@ export function summarizeExercisePeriod(
   };
 }
 
-export type ExerciseProgressStatus = "progressed" | "maintained" | "decreased" | "insufficient_data";
+export type ExerciseProgressStatus =
+  "progressed" | "maintained" | "decreased" | "insufficient_data";
 
 export interface ExerciseProgressComparison {
   status: ExerciseProgressStatus;

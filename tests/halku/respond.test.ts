@@ -70,8 +70,18 @@ describe("buildHalkuAnswer — grounds real data when available, labelled clearl
   it("matches the named muscle group's own row, not a different one", () => {
     const data: HalkuKnownData = {
       progressRows: [
-        { exerciseName: "Barbell Curl", muscleGroup: "Biceps", status: "maintained", explanation: "Same weight, reps and sets as last time." },
-        { exerciseName: "Barbell Squat", muscleGroup: "Legs", status: "progressed", explanation: "Working weight up 50 → 55 kg." },
+        {
+          exerciseName: "Barbell Curl",
+          muscleGroup: "Biceps",
+          status: "maintained",
+          explanation: "Same weight, reps and sets as last time.",
+        },
+        {
+          exerciseName: "Barbell Squat",
+          muscleGroup: "Legs",
+          status: "progressed",
+          explanation: "Working weight up 50 → 55 kg.",
+        },
       ],
     };
     const answer = buildHalkuAnswer(
@@ -87,12 +97,28 @@ describe("buildHalkuAnswer — grounds real data when available, labelled clearl
   it("a progressed muscle group does not affect a different one's answer (no cross-muscle suppression)", () => {
     const data: HalkuKnownData = {
       progressRows: [
-        { exerciseName: "Barbell Curl", muscleGroup: "Biceps", status: "progressed", explanation: "Working weight up 15 → 17.5 kg." },
-        { exerciseName: "Barbell Squat", muscleGroup: "Legs", status: "progressed", explanation: "Working weight up 50 → 55 kg." },
+        {
+          exerciseName: "Barbell Curl",
+          muscleGroup: "Biceps",
+          status: "progressed",
+          explanation: "Working weight up 15 → 17.5 kg.",
+        },
+        {
+          exerciseName: "Barbell Squat",
+          muscleGroup: "Legs",
+          status: "progressed",
+          explanation: "Working weight up 50 → 55 kg.",
+        },
       ],
     };
-    const legs = buildHalkuAnswer({ kind: "why_progression_status", muscleGroupHint: "Legs" }, data);
-    const biceps = buildHalkuAnswer({ kind: "why_progression_status", muscleGroupHint: "Biceps" }, data);
+    const legs = buildHalkuAnswer(
+      { kind: "why_progression_status", muscleGroupHint: "Legs" },
+      data,
+    );
+    const biceps = buildHalkuAnswer(
+      { kind: "why_progression_status", muscleGroupHint: "Biceps" },
+      data,
+    );
     expect(legs.text).toContain("Squat");
     expect(legs.text).toContain("Progressed");
     expect(biceps.text).toContain("Curl");
@@ -102,10 +128,18 @@ describe("buildHalkuAnswer — grounds real data when available, labelled clearl
   it("falls back to an honest message when the named muscle group has no row yet", () => {
     const data: HalkuKnownData = {
       progressRows: [
-        { exerciseName: "Barbell Squat", muscleGroup: "Legs", status: "progressed", explanation: "Working weight up 50 → 55 kg." },
+        {
+          exerciseName: "Barbell Squat",
+          muscleGroup: "Legs",
+          status: "progressed",
+          explanation: "Working weight up 50 → 55 kg.",
+        },
       ],
     };
-    const answer = buildHalkuAnswer({ kind: "why_progression_status", muscleGroupHint: "Biceps" }, data);
+    const answer = buildHalkuAnswer(
+      { kind: "why_progression_status", muscleGroupHint: "Biceps" },
+      data,
+    );
     expect(answer.grounded).toBe(false);
     expect(answer.text.toLowerCase()).toContain("couldn't match");
   });

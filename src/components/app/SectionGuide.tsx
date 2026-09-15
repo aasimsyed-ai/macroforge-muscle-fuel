@@ -33,7 +33,6 @@ export function SectionGuide({ section }: { section: GuideSectionId }) {
     if (!hasSeenSectionGuide(section)) setOpen(true);
     // Only check once per mount of this section — re-checking on every
     // render would reopen it if something else closed it programmatically.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [section]);
 
   function dismiss() {

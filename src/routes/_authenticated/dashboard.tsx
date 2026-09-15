@@ -54,7 +54,8 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
       { title: "Dashboard — MacroForge" },
       {
         name: "description",
-        content: "Your calories, protein, macros, body metrics and training consistency at a glance.",
+        content:
+          "Your calories, protein, macros, body metrics and training consistency at a glance.",
       },
       { property: "og:title", content: "Dashboard — MacroForge" },
       { property: "og:description", content: "Daily targets, macro rings and lean-bulk trends." },
@@ -140,7 +141,6 @@ function Dashboard() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [goals, dailyProteinTotals]);
 
   const rangeTotals = sumMeals(rangeMeals.data);
@@ -149,7 +149,12 @@ function Dashboard() {
   // For a single day the rings show that day's totals; for a multi-day range
   // they show the daily average, so the section always reflects the selection.
   const progress = isSingleDay
-    ? { calories: rangeTotals.calories, protein: rangeTotals.protein, carbs: rangeTotals.carbs, fat: rangeTotals.fat }
+    ? {
+        calories: rangeTotals.calories,
+        protein: rangeTotals.protein,
+        carbs: rangeTotals.carbs,
+        fat: rangeTotals.fat,
+      }
     : {
         calories: rangeTotals.calories / days,
         protein: rangeTotals.protein / days,
@@ -181,7 +186,10 @@ function Dashboard() {
   const workoutMinutesByDate = useMemo(() => {
     const map = new Map<string, number>();
     for (const session of rangeWorkoutStats.data?.sessions ?? []) {
-      map.set(session.workout_date, (map.get(session.workout_date) ?? 0) + (session.duration_minutes ?? 0));
+      map.set(
+        session.workout_date,
+        (map.get(session.workout_date) ?? 0) + (session.duration_minutes ?? 0),
+      );
     }
     return map;
   }, [rangeWorkoutStats.data]);
@@ -217,7 +225,10 @@ function Dashboard() {
       notes: m.notes ?? "",
     }));
     if (!rows.length) return;
-    downloadCsv(`macroforge-meals-${format(range.from, "yyyyMMdd")}-${format(range.to, "yyyyMMdd")}.csv`, toCsv(rows));
+    downloadCsv(
+      `macroforge-meals-${format(range.from, "yyyyMMdd")}-${format(range.to, "yyyyMMdd")}.csv`,
+      toCsv(rows),
+    );
   }
 
   if (loading || !goals) {
@@ -236,7 +247,11 @@ function Dashboard() {
   const remainingProtein = Math.max(0, goals.protein_target_g - progress.protein);
 
   const loggingStreak = computeLoggingStreak(dailyProteinTotals, new Date());
-  const proteinStreak = computeProteinStreak(dailyProteinTotals, goals.protein_target_g, new Date());
+  const proteinStreak = computeProteinStreak(
+    dailyProteinTotals,
+    goals.protein_target_g,
+    new Date(),
+  );
 
   const startWeight =
     profile.data?.start_weight_kg != null ? Number(profile.data.start_weight_kg) : null;
@@ -249,7 +264,10 @@ function Dashboard() {
       <OnboardingIntro />
 
       {milestoneBurstKey > 0 ? (
-        <div className="pointer-events-none fixed left-1/2 top-24 z-50 -translate-x-1/2" aria-hidden="true">
+        <div
+          className="pointer-events-none fixed left-1/2 top-24 z-50 -translate-x-1/2"
+          aria-hidden="true"
+        >
           <DayCelebration key={milestoneBurstKey} />
         </div>
       ) : null}
@@ -279,7 +297,10 @@ function Dashboard() {
             aria-label="Custom range start"
             value={search.from ?? format(range.from, "yyyy-MM-dd")}
             onChange={(e) =>
-              navigate({ to: "/dashboard", search: (p) => ({ ...p, range: "custom", from: e.target.value }) })
+              navigate({
+                to: "/dashboard",
+                search: (p) => ({ ...p, range: "custom", from: e.target.value }),
+              })
             }
             className="rounded-md border border-border bg-card px-2 py-1.5 text-xs"
           />
@@ -289,7 +310,10 @@ function Dashboard() {
             aria-label="Custom range end"
             value={search.to ?? format(range.to, "yyyy-MM-dd")}
             onChange={(e) =>
-              navigate({ to: "/dashboard", search: (p) => ({ ...p, range: "custom", to: e.target.value }) })
+              navigate({
+                to: "/dashboard",
+                search: (p) => ({ ...p, range: "custom", to: e.target.value }),
+              })
             }
             className="rounded-md border border-border bg-card px-2 py-1.5 text-xs"
           />
@@ -309,113 +333,141 @@ function Dashboard() {
         />
       ) : (
         <>
-      <div className="mt-4 space-y-3">
-        <StreakBadges loggingStreak={loggingStreak} proteinStreak={proteinStreak} />
-        {rangeKey === "today" ? (
-          <DailyCompletionCard
-            date={quickLogDate}
-            calories={progress.calories}
-            calorieTarget={goals.calorie_target}
-            protein={progress.protein}
-            proteinTarget={goals.protein_target_g}
-          />
-        ) : null}
-      </div>
+          <div className="mt-4 space-y-3">
+            <StreakBadges loggingStreak={loggingStreak} proteinStreak={proteinStreak} />
+            {rangeKey === "today" ? (
+              <DailyCompletionCard
+                date={quickLogDate}
+                calories={progress.calories}
+                calorieTarget={goals.calorie_target}
+                protein={progress.protein}
+                proteinTarget={goals.protein_target_g}
+              />
+            ) : null}
+          </div>
 
-      <section className="panel mt-3 p-4" aria-label="Goal progress">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <p className="text-sm font-semibold">
-            {isSingleDay ? `${range.label} · goal progress` : `${range.label} · daily average vs target`}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {isSingleDay
-              ? `${Math.round(remainingKcal)} kcal and ${round(remainingProtein, 1)} g protein remaining`
-              : `averaging ${Math.round(progress.calories)} kcal and ${round(progress.protein, 1)} g protein per day`}
-          </p>
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <ProgressRing value={Math.round(progress.calories)} target={goals.calorie_target} label="Calories" unit=" kcal" />
-          <ProgressRing value={round(progress.protein, 1)} target={goals.protein_target_g} label="Protein" unit=" g" tone="protein" />
-          <ProgressRing value={round(progress.carbs, 1)} target={goals.carb_target_g} label="Carbs" unit=" g" tone="carbs" />
-          <ProgressRing value={round(progress.fat, 1)} target={goals.fat_target_g} label="Fat" unit=" g" tone="fat" />
-        </div>
-      </section>
+          <section className="panel mt-3 p-4" aria-label="Goal progress">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-sm font-semibold">
+                {isSingleDay
+                  ? `${range.label} · goal progress`
+                  : `${range.label} · daily average vs target`}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {isSingleDay
+                  ? `${Math.round(remainingKcal)} kcal and ${round(remainingProtein, 1)} g protein remaining`
+                  : `averaging ${Math.round(progress.calories)} kcal and ${round(progress.protein, 1)} g protein per day`}
+              </p>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <ProgressRing
+                value={Math.round(progress.calories)}
+                target={goals.calorie_target}
+                label="Calories"
+                unit=" kcal"
+              />
+              <ProgressRing
+                value={round(progress.protein, 1)}
+                target={goals.protein_target_g}
+                label="Protein"
+                unit=" g"
+                tone="protein"
+              />
+              <ProgressRing
+                value={round(progress.carbs, 1)}
+                target={goals.carb_target_g}
+                label="Carbs"
+                unit=" g"
+                tone="carbs"
+              />
+              <ProgressRing
+                value={round(progress.fat, 1)}
+                target={goals.fat_target_g}
+                label="Fat"
+                unit=" g"
+                tone="fat"
+              />
+            </div>
+          </section>
 
-      <section className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label={`${range.label} averages`}>
-        <StatCard
-          label={`${range.label} avg calories`}
-          value={`${Math.round(rangeTotals.calories / days)}`}
-          hint={`Target ${goals.calorie_target} kcal/day · ${rangeTotals.count} meals logged`}
-        />
-        <StatCard
-          label={`${range.label} avg protein`}
-          value={`${round(rangeTotals.protein / days, 1)} g`}
-          hint={`Target ${goals.protein_target_g} g/day`}
-        />
-        <StatCard
-          label="Workout consistency"
-          value={`${workoutDays}/${days} days`}
-          icon={<Dumbbell className="size-4" />}
-          hint={`Goal ${goals.workout_days_per_week} sessions/week`}
-        />
-        <StatCard
-          label="Creatine adherence"
-          value={`${days ? Math.round((creatineDays / days) * 100) : 0}%`}
-          icon={<Pill className="size-4" />}
-          hint={`${creatineDays} of ${days} days`}
-        />
-        <StatCard
-          label="Latest weight"
-          value={latestWeight ? `${latestWeight} kg` : "—"}
-          icon={<Scale className="size-4" />}
-          hint={`Goal ${goals.target_weight_kg} kg · ${profile.data?.height_cm ?? 170} cm`}
-        />
-        <StatCard
-          label="Latest waist"
-          value={latestWaist ? `${latestWaist} cm` : "—"}
-          icon={<Ruler className="size-4" />}
-          hint="Keep this controlled while gaining"
-        />
-        <StatCard
-          label="Avg sleep"
-          value={avgSleep ? `${avgSleep} h` : "—"}
-          icon={<Moon className="size-4" />}
-          hint={`Target ${goals.sleep_target_hours} h`}
-        />
-        <StatCard
-          label="Avg water"
-          value={avgWater ? `${(avgWater / 1000).toFixed(1)} L` : "—"}
-          icon={<Droplets className="size-4" />}
-          hint={`Target ${(goals.water_target_ml / 1000).toFixed(1)} L`}
-        />
-      </section>
+          <section
+            className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+            aria-label={`${range.label} averages`}
+          >
+            <StatCard
+              label={`${range.label} avg calories`}
+              value={`${Math.round(rangeTotals.calories / days)}`}
+              hint={`Target ${goals.calorie_target} kcal/day · ${rangeTotals.count} meals logged`}
+            />
+            <StatCard
+              label={`${range.label} avg protein`}
+              value={`${round(rangeTotals.protein / days, 1)} g`}
+              hint={`Target ${goals.protein_target_g} g/day`}
+            />
+            <StatCard
+              label="Workout consistency"
+              value={`${workoutDays}/${days} days`}
+              icon={<Dumbbell className="size-4" />}
+              hint={`Goal ${goals.workout_days_per_week} sessions/week`}
+            />
+            <StatCard
+              label="Creatine adherence"
+              value={`${days ? Math.round((creatineDays / days) * 100) : 0}%`}
+              icon={<Pill className="size-4" />}
+              hint={`${creatineDays} of ${days} days`}
+            />
+            <StatCard
+              label="Latest weight"
+              value={latestWeight ? `${latestWeight} kg` : "—"}
+              icon={<Scale className="size-4" />}
+              hint={`Goal ${goals.target_weight_kg} kg · ${profile.data?.height_cm ?? 170} cm`}
+            />
+            <StatCard
+              label="Latest waist"
+              value={latestWaist ? `${latestWaist} cm` : "—"}
+              icon={<Ruler className="size-4" />}
+              hint="Keep this controlled while gaining"
+            />
+            <StatCard
+              label="Avg sleep"
+              value={avgSleep ? `${avgSleep} h` : "—"}
+              icon={<Moon className="size-4" />}
+              hint={`Target ${goals.sleep_target_hours} h`}
+            />
+            <StatCard
+              label="Avg water"
+              value={avgWater ? `${(avgWater / 1000).toFixed(1)} L` : "—"}
+              icon={<Droplets className="size-4" />}
+              hint={`Target ${(goals.water_target_ml / 1000).toFixed(1)} L`}
+            />
+          </section>
 
-      <div className="mt-5">
-        <WeeklyRecapCard />
-      </div>
+          <div className="mt-5">
+            <WeeklyRecapCard />
+          </div>
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-2">
-        <DailyIntakeChart
-          meals={rangeMeals.data ?? []}
-          calorieTarget={goals.calorie_target}
-          proteinTarget={goals.protein_target_g}
-        />
-        <BodyTrendChart metrics={allMetrics.data ?? []} />
-        {startWeight != null && latestWeight != null ? (
-          <WeightJourneyCard
-            startWeight={startWeight}
-            currentWeight={latestWeight}
-            goalWeight={goals.target_weight_kg}
-          />
-        ) : null}
-        <HabitChart metrics={metrics} workoutMinutesByDate={workoutMinutesByDate} />
-        <MetricsQuickLog date={quickLogDate} metric={quickLogMetric} goals={goals} />
-      </div>
+          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            <DailyIntakeChart
+              meals={rangeMeals.data ?? []}
+              calorieTarget={goals.calorie_target}
+              proteinTarget={goals.protein_target_g}
+            />
+            <BodyTrendChart metrics={allMetrics.data ?? []} />
+            {startWeight != null && latestWeight != null ? (
+              <WeightJourneyCard
+                startWeight={startWeight}
+                currentWeight={latestWeight}
+                goalWeight={goals.target_weight_kg}
+              />
+            ) : null}
+            <HabitChart metrics={metrics} workoutMinutesByDate={workoutMinutesByDate} />
+            <MetricsQuickLog date={quickLogDate} metric={quickLogMetric} goals={goals} />
+          </div>
 
-      <section className="mt-6" aria-label="Meal history">
-        <h2 className="mb-3 text-lg font-semibold">Meal history · {range.label}</h2>
-        <MealList meals={rangeMeals.data ?? []} />
-      </section>
+          <section className="mt-6" aria-label="Meal history">
+            <h2 className="mb-3 text-lg font-semibold">Meal history · {range.label}</h2>
+            <MealList meals={rangeMeals.data ?? []} />
+          </section>
         </>
       )}
     </AppShell>

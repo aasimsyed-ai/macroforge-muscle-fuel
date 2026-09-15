@@ -51,9 +51,7 @@ describe("summarizeExercisePeriod", () => {
   });
 });
 
-const weighted = (
-  overrides: Partial<ExercisePeriodStats> = {},
-): ExercisePeriodStats => ({
+const weighted = (overrides: Partial<ExercisePeriodStats> = {}): ExercisePeriodStats => ({
   completedSets: 3,
   totalSets: 3,
   totalVolume: 900,
@@ -65,23 +63,35 @@ const weighted = (
 
 describe("compareExercisePeriods", () => {
   it("reports insufficient_data when the current period has nothing logged", () => {
-    const result = compareExercisePeriods(weighted({ completedSets: 0, topWeightKg: null }), weighted());
+    const result = compareExercisePeriods(
+      weighted({ completedSets: 0, topWeightKg: null }),
+      weighted(),
+    );
     expect(result.status).toBe("insufficient_data");
   });
 
   it("reports insufficient_data when there is nothing comparable in the previous period", () => {
-    const result = compareExercisePeriods(weighted(), weighted({ completedSets: 0, topWeightKg: null }));
+    const result = compareExercisePeriods(
+      weighted(),
+      weighted({ completedSets: 0, topWeightKg: null }),
+    );
     expect(result.status).toBe("insufficient_data");
   });
 
   it("progressed: heavier working weight than last time", () => {
-    const result = compareExercisePeriods(weighted({ topWeightKg: 42.5 }), weighted({ topWeightKg: 40 }));
+    const result = compareExercisePeriods(
+      weighted({ topWeightKg: 42.5 }),
+      weighted({ topWeightKg: 40 }),
+    );
     expect(result.status).toBe("progressed");
     expect(result.changeWeightKg).toBe(2.5);
   });
 
   it("decreased: lighter working weight than last time", () => {
-    const result = compareExercisePeriods(weighted({ topWeightKg: 35 }), weighted({ topWeightKg: 40 }));
+    const result = compareExercisePeriods(
+      weighted({ topWeightKg: 35 }),
+      weighted({ topWeightKg: 40 }),
+    );
     expect(result.status).toBe("decreased");
   });
 

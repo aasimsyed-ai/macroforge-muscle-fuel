@@ -54,7 +54,7 @@ export function ProgressionSuggestion() {
           <p className="text-sm font-semibold">Progression insight</p>
         </div>
         {names.data && names.data.length > 0 ? (
-          <Select value={selected ?? undefined} onValueChange={setSelected}>
+          <Select onValueChange={setSelected} {...(selected ? { value: selected } : {})}>
             <SelectTrigger className="h-8 w-[190px] text-xs" aria-label="Exercise">
               <SelectValue placeholder="Choose an exercise" />
             </SelectTrigger>

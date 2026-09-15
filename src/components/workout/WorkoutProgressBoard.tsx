@@ -19,7 +19,11 @@ const PERIODS: ReadonlyArray<{ value: ProgressBoardPeriod; label: string }> = [
 
 const STATUS_META: Record<
   ExerciseProgressStatus,
-  { label: string; badge: "default" | "secondary" | "destructive" | "outline"; Icon: typeof TrendingUp }
+  {
+    label: string;
+    badge: "default" | "secondary" | "destructive" | "outline";
+    Icon: typeof TrendingUp;
+  }
 > = {
   progressed: { label: "Progressed", badge: "default", Icon: TrendingUp },
   maintained: { label: "Maintained", badge: "secondary", Icon: Minus },
@@ -27,10 +31,17 @@ const STATUS_META: Record<
   insufficient_data: { label: "Not enough data", badge: "outline", Icon: HelpCircle },
 };
 
-function periodSummary(stats: { completedSets: number; topWeightKg: number | null; repsAtTopWeight: number | null; averageReps: number | null }): string {
+function periodSummary(stats: {
+  completedSets: number;
+  topWeightKg: number | null;
+  repsAtTopWeight: number | null;
+  averageReps: number | null;
+}): string {
   if (stats.completedSets === 0) return "no sets";
-  if (stats.topWeightKg != null) return `${stats.topWeightKg} kg × ${stats.repsAtTopWeight} reps · ${stats.completedSets} sets`;
-  if (stats.averageReps != null) return `${stats.averageReps} reps avg · ${stats.completedSets} sets`;
+  if (stats.topWeightKg != null)
+    return `${stats.topWeightKg} kg × ${stats.repsAtTopWeight} reps · ${stats.completedSets} sets`;
+  if (stats.averageReps != null)
+    return `${stats.averageReps} reps avg · ${stats.completedSets} sets`;
   return `${stats.completedSets} sets`;
 }
 
@@ -68,7 +79,9 @@ export function WorkoutProgressBoard() {
               onClick={() => setPeriod(item.value)}
               aria-pressed={period === item.value}
               className={`rounded px-2 py-1 transition-colors ${
-                period === item.value ? "bg-card font-semibold text-foreground" : "text-muted-foreground"
+                period === item.value
+                  ? "bg-card font-semibold text-foreground"
+                  : "text-muted-foreground"
               }`}
             >
               {item.label}
@@ -126,7 +139,9 @@ export function WorkoutProgressBoard() {
                       </span>
                     ) : null}
                   </p>
-                  <p className="mt-1 text-[11px] text-muted-foreground">{row.comparison.explanation}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    {row.comparison.explanation}
+                  </p>
                 </li>
               );
             })}

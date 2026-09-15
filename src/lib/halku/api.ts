@@ -5,7 +5,8 @@ import type { HalkuAnswer, HalkuKnownData } from "./types";
 // intentionally duplicated rather than imported, since food-estimate.ts
 // doesn't export these and this keeps Halku independent of the food module.
 const SUPABASE_URL: string =
-  (typeof import.meta !== "undefined" && import.meta.env && import.meta.env["VITE_SUPABASE_URL"]) || "";
+  (typeof import.meta !== "undefined" && import.meta.env && import.meta.env["VITE_SUPABASE_URL"]) ||
+  "";
 const SUPABASE_KEY: string =
   (typeof import.meta !== "undefined" &&
     import.meta.env &&

@@ -508,7 +508,12 @@ export async function fetchExerciseProgressBoard(
     );
   if (setError) throw setError;
 
-  type MiniSet = { reps: number; weightKg: number | null; weightMode: WeightMode; completed: boolean };
+  type MiniSet = {
+    reps: number;
+    weightKg: number | null;
+    weightMode: WeightMode;
+    completed: boolean;
+  };
   const setsByExercise = new Map<string, MiniSet[]>();
   for (const row of setRows ?? []) {
     const list = setsByExercise.get(row.workout_exercise_id) ?? [];
