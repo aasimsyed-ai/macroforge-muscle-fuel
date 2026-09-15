@@ -1,4 +1,4 @@
-import { Activity, Dumbbell, Flame, HeartPulse, Layers, Timer } from "lucide-react";
+import { Activity, Dumbbell, Flame, HeartPulse, Timer } from "lucide-react";
 
 import { StatCard } from "@/components/app/StatCard";
 import type { WorkoutRangeStats } from "@/lib/workouts/api";
@@ -43,12 +43,6 @@ export function WorkoutSummaryCards({ stats }: { stats: WorkoutRangeStats }) {
         value={calorieLabel}
         icon={<Flame className="size-4" />}
         hint={calorieHint}
-      />
-      <StatCard
-        label="External-load volume"
-        value={`${Math.round(stats.totalVolume).toLocaleString()} kg`}
-        icon={<Layers className="size-4" />}
-        hint="Reps × weight, completed sets"
       />
       <StatCard
         label="Completed sets"

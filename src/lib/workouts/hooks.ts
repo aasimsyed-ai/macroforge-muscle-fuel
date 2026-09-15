@@ -1,6 +1,8 @@
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import * as api from "./api";
+import { resolveProgressBoardWindow, type ProgressBoardPeriod } from "./calculations";
 import type { TrainingPreferences, WorkoutSessionDraft } from "./types";
 
 const WORKOUT_KEY = ["workout"] as const;
@@ -57,11 +59,27 @@ export function useReplaceWorkout() {
   });
 }
 
-export function useRecentSessionVolumes(limit = 8, options?: { enabled?: boolean }) {
+/** Progressive-overload board for one period, always vs. the period right before it. */
+export function useExerciseProgressBoard(period: ProgressBoardPeriod) {
+  // Stable within a render pass; recomputed only when the period changes (or
+  // on remount), which is what determines the query key/refetch anyway.
+  const window = useMemo(() => resolveProgressBoardWindow(period, new Date()), [period]);
   return useQuery({
-    queryKey: [...WORKOUT_KEY, "recent-volumes", limit],
-    enabled: options?.enabled ?? true,
-    queryFn: () => api.fetchRecentSessionVolumes(limit),
+    queryKey: [
+      ...WORKOUT_KEY,
+      "progress-board",
+      window.currentFrom,
+      window.currentTo,
+      window.previousFrom,
+      window.previousTo,
+    ],
+    queryFn: () =>
+      api.fetchExerciseProgressBoard(
+        window.currentFrom,
+        window.currentTo,
+        window.previousFrom,
+        window.previousTo,
+      ),
   });
 }
 

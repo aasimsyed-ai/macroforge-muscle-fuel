@@ -4,6 +4,10 @@ import type { Database, Json } from "@/integrations/supabase/types";
 import {
   calculateSessionVolume,
   calculateWorkoutCalories,
+  compareExercisePeriods,
+  summarizeExercisePeriod,
+  type ExerciseProgressComparison,
+  type ExercisePeriodStats,
   type ProgressionHistoryItem,
 } from "./calculations";
 import type {
@@ -51,27 +55,6 @@ export async function fetchExerciseCatalog(): Promise<ExerciseCatalogItem[]> {
 }
 
 /* --------------------------------- sessions -------------------------------- */
-
-export interface SessionVolumePoint {
-  date: string;
-  volume: number;
-}
-
-/** The last few sessions' total volume, oldest first — a compact "is load trending up" signal. */
-export async function fetchRecentSessionVolumes(limit = 8): Promise<SessionVolumePoint[]> {
-  const user = await requireUser();
-  const { data, error } = await supabase
-    .from("workout_sessions")
-    .select("workout_date, total_volume")
-    .eq("user_id", user.id)
-    .order("workout_date", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  if (error) throw error;
-  return (data ?? [])
-    .map((row) => ({ date: row.workout_date, volume: Number(row.total_volume) }))
-    .reverse();
-}
 
 export async function fetchWorkoutSessions(
   fromDate: string,
@@ -453,6 +436,134 @@ export async function fetchWorkoutStats(
       : null,
     calories: { value: Math.round(calorieTotal), anyWearable, anyEstimated },
   };
+}
+
+export interface ExerciseProgressRow {
+  muscleGroup: string;
+  exerciseName: string;
+  current: ExercisePeriodStats;
+  previous: ExercisePeriodStats;
+  comparison: ExerciseProgressComparison;
+}
+
+/**
+ * Per-exercise progressive-overload comparison between two adjacent date
+ * windows (e.g. this week vs last week). Three plain queries regardless of
+ * how many exercises are involved — sessions in the combined range, their
+ * exercises, then those exercises' sets — bucketed and grouped in JS, the
+ * same shape as `fetchWorkoutStats`/`fetchExerciseHistory` above. Every
+ * exercise is compared only against its own prior period; nothing here
+ * looks at, or can suppress, any other exercise's result.
+ */
+export async function fetchExerciseProgressBoard(
+  currentFrom: string,
+  currentTo: string,
+  previousFrom: string,
+  previousTo: string,
+): Promise<ExerciseProgressRow[]> {
+  const user = await requireUser();
+
+  const { data: sessionRows, error: sessionError } = await supabase
+    .from("workout_sessions")
+    .select("id, workout_date")
+    .eq("user_id", user.id)
+    .gte("workout_date", previousFrom)
+    .lte("workout_date", currentTo);
+  if (sessionError) throw sessionError;
+
+  const sessions = sessionRows ?? [];
+  if (sessions.length === 0) return [];
+
+  const windowBySession = new Map<string, "current" | "previous" | null>(
+    sessions.map((session) => {
+      const bucket: "current" | "previous" | null =
+        session.workout_date >= currentFrom && session.workout_date <= currentTo
+          ? "current"
+          : session.workout_date >= previousFrom && session.workout_date <= previousTo
+            ? "previous"
+            : null;
+      return [session.id, bucket] as const;
+    }),
+  );
+
+  const { data: exerciseRows, error: exerciseError } = await supabase
+    .from("workout_exercises")
+    .select("id, session_id, muscle_group, exercise_name")
+    .eq("user_id", user.id)
+    .in(
+      "session_id",
+      sessions.map((session) => session.id),
+    );
+  if (exerciseError) throw exerciseError;
+
+  const exercises = exerciseRows ?? [];
+  if (exercises.length === 0) return [];
+
+  const { data: setRows, error: setError } = await supabase
+    .from("workout_sets")
+    .select("workout_exercise_id, reps, weight_kg, weight_mode, completed")
+    .in(
+      "workout_exercise_id",
+      exercises.map((exercise) => exercise.id),
+    );
+  if (setError) throw setError;
+
+  type MiniSet = { reps: number; weightKg: number | null; weightMode: WeightMode; completed: boolean };
+  const setsByExercise = new Map<string, MiniSet[]>();
+  for (const row of setRows ?? []) {
+    const list = setsByExercise.get(row.workout_exercise_id) ?? [];
+    list.push({
+      reps: row.reps,
+      weightKg: row.weight_kg !== null ? Number(row.weight_kg) : null,
+      weightMode: row.weight_mode as WeightMode,
+      completed: row.completed,
+    });
+    setsByExercise.set(row.workout_exercise_id, list);
+  }
+
+  const groups = new Map<
+    string,
+    { muscleGroup: string; exerciseName: string; currentSets: MiniSet[]; previousSets: MiniSet[] }
+  >();
+  for (const exercise of exercises) {
+    const bucket = windowBySession.get(exercise.session_id);
+    if (!bucket) continue;
+    const key = `${exercise.muscle_group}::${exercise.exercise_name.trim().toLowerCase()}`;
+    const group = groups.get(key) ?? {
+      muscleGroup: exercise.muscle_group,
+      exerciseName: exercise.exercise_name,
+      currentSets: [],
+      previousSets: [],
+    };
+    const sets = setsByExercise.get(exercise.id) ?? [];
+    if (bucket === "current") group.currentSets.push(...sets);
+    else group.previousSets.push(...sets);
+    groups.set(key, group);
+  }
+
+  const rows: ExerciseProgressRow[] = [];
+  for (const group of groups.values()) {
+    const current = summarizeExercisePeriod(group.currentSets);
+    const previous = summarizeExercisePeriod(group.previousSets);
+    rows.push({
+      muscleGroup: group.muscleGroup,
+      exerciseName: group.exerciseName,
+      current,
+      previous,
+      comparison: compareExercisePeriods(current, previous),
+    });
+  }
+
+  // Exercises actually trained in the current window first (most relevant to
+  // "what changed"), then alphabetically by muscle group and name.
+  rows.sort((a, b) => {
+    if (a.current.completedSets === 0 && b.current.completedSets > 0) return 1;
+    if (b.current.completedSets === 0 && a.current.completedSets > 0) return -1;
+    if (a.muscleGroup !== b.muscleGroup) return a.muscleGroup.localeCompare(b.muscleGroup);
+    return a.exerciseName.localeCompare(b.exerciseName);
+  });
+
+  return rows;
 }
 
 /* --------------------------- training preferences ------------------------- */

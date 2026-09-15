@@ -1,5 +1,5 @@
 import { INDIAN_GYM_WEIGHTS_KG, INTENSITIES } from "./constants";
-import type { TrainingPreferences, WorkoutIntensity, WorkoutSetDraft } from "./types";
+import type { TrainingPreferences, WeightMode, WorkoutIntensity, WorkoutSetDraft } from "./types";
 
 export function calculateSetVolume(
   set: Pick<WorkoutSetDraft, "reps" | "weightKg" | "weightMode" | "completed">,
@@ -259,5 +259,323 @@ export function analyzeExerciseProgression(
     suggestedWeightKg: null,
     explanation:
       "Keep the current load and work toward the top of your target rep range with controlled form.",
+  };
+}
+
+/* --------------------- week/month progressive-overload board -------------------- */
+
+function round1(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+export interface ExercisePeriodStats {
+  completedSets: number;
+  totalSets: number;
+  totalVolume: number;
+  /** Max external-load weight among completed sets that tracked one; null when
+   * every completed set was pure bodyweight (no added load). */
+  topWeightKg: number | null;
+  /** Average reps across the completed sets performed at `topWeightKg`. */
+  repsAtTopWeight: number | null;
+  /** Average reps across every completed set — the bodyweight comparison fallback. */
+  averageReps: number | null;
+}
+
+const EMPTY_PERIOD_STATS: Omit<ExercisePeriodStats, "totalSets"> = {
+  completedSets: 0,
+  totalVolume: 0,
+  topWeightKg: null,
+  repsAtTopWeight: null,
+  averageReps: null,
+};
+
+/** Reduces one exercise's sets within a single period into comparable stats. Pure. */
+export function summarizeExercisePeriod(
+  sets: ReadonlyArray<{
+    reps: number;
+    weightKg: number | null;
+    weightMode: WeightMode;
+    completed: boolean;
+  }>,
+): ExercisePeriodStats {
+  const totalSets = sets.length;
+  const completed = sets.filter((set) => set.completed);
+  if (completed.length === 0) {
+    return { ...EMPTY_PERIOD_STATS, totalSets };
+  }
+
+  const totalVolume = completed.reduce((sum, set) => sum + calculateSetVolume(set), 0);
+
+  const weighted = completed.filter(
+    (set) => set.weightMode !== "bodyweight" && set.weightKg !== null && Number.isFinite(set.weightKg),
+  );
+  const topWeightKg = weighted.length
+    ? Math.max(...weighted.map((set) => set.weightKg as number))
+    : null;
+  const atTopWeight = topWeightKg !== null ? weighted.filter((set) => set.weightKg === topWeightKg) : [];
+  const repsAtTopWeight = atTopWeight.length
+    ? round1(atTopWeight.reduce((sum, set) => sum + set.reps, 0) / atTopWeight.length)
+    : null;
+  const averageReps = round1(completed.reduce((sum, set) => sum + set.reps, 0) / completed.length);
+
+  return {
+    completedSets: completed.length,
+    totalSets,
+    totalVolume,
+    topWeightKg,
+    repsAtTopWeight,
+    averageReps,
+  };
+}
+
+export type ExerciseProgressStatus = "progressed" | "maintained" | "decreased" | "insufficient_data";
+
+export interface ExerciseProgressComparison {
+  status: ExerciseProgressStatus;
+  explanation: string;
+  changeWeightKg: number | null;
+  changeReps: number | null;
+  changeSets: number | null;
+}
+
+/**
+ * Compares one exercise's stats between two periods and classifies progress.
+ * Deliberately does NOT use total volume as the deciding signal — progressive
+ * overload can come from more weight, more reps at the same weight, or more
+ * sets, checked in that order (each only decides once the one before it is
+ * tied), matching how lifters actually think about progression. Pure —
+ * comparisons are always against the two stats objects passed in, never
+ * against any other exercise or muscle group, so nothing here can suppress
+ * or gate a different exercise's own comparison.
+ */
+export function compareExercisePeriods(
+  current: ExercisePeriodStats,
+  previous: ExercisePeriodStats,
+): ExerciseProgressComparison {
+  const none = (explanation: string): ExerciseProgressComparison => ({
+    status: "insufficient_data",
+    explanation,
+    changeWeightKg: null,
+    changeReps: null,
+    changeSets: null,
+  });
+
+  if (current.completedSets === 0) {
+    return none("No completed sets logged for this exercise in this period.");
+  }
+  if (previous.completedSets === 0) {
+    return none("No comparable data from the previous period yet.");
+  }
+
+  const changeSets = current.completedSets - previous.completedSets;
+
+  if (current.topWeightKg !== null && previous.topWeightKg !== null) {
+    const changeWeightKg = round1(current.topWeightKg - previous.topWeightKg);
+    if (changeWeightKg > 0) {
+      return {
+        status: "progressed",
+        explanation: `Working weight up ${previous.topWeightKg} → ${current.topWeightKg} kg.`,
+        changeWeightKg,
+        changeReps: null,
+        changeSets: null,
+      };
+    }
+    if (changeWeightKg < 0) {
+      return {
+        status: "decreased",
+        explanation: `Working weight down ${previous.topWeightKg} → ${current.topWeightKg} kg.`,
+        changeWeightKg,
+        changeReps: null,
+        changeSets: null,
+      };
+    }
+
+    const curReps = current.repsAtTopWeight ?? 0;
+    const prevReps = previous.repsAtTopWeight ?? 0;
+    const changeReps = round1(curReps - prevReps);
+    if (changeReps > 0) {
+      return {
+        status: "progressed",
+        explanation: `Same weight (${current.topWeightKg} kg), reps up ${previous.repsAtTopWeight} → ${current.repsAtTopWeight}.`,
+        changeWeightKg: 0,
+        changeReps,
+        changeSets: null,
+      };
+    }
+    if (changeReps < 0) {
+      return {
+        status: "decreased",
+        explanation: `Same weight (${current.topWeightKg} kg), reps down ${previous.repsAtTopWeight} → ${current.repsAtTopWeight}.`,
+        changeWeightKg: 0,
+        changeReps,
+        changeSets: null,
+      };
+    }
+
+    if (changeSets > 0) {
+      return {
+        status: "progressed",
+        explanation: `Same weight and reps, but more sets (${current.completedSets} vs ${previous.completedSets}).`,
+        changeWeightKg: 0,
+        changeReps: 0,
+        changeSets,
+      };
+    }
+    if (changeSets < 0) {
+      return {
+        status: "decreased",
+        explanation: `Same weight and reps, but fewer sets (${current.completedSets} vs ${previous.completedSets}).`,
+        changeWeightKg: 0,
+        changeReps: 0,
+        changeSets,
+      };
+    }
+    return {
+      status: "maintained",
+      explanation: "Same weight, reps and sets as last time.",
+      changeWeightKg: 0,
+      changeReps: 0,
+      changeSets: 0,
+    };
+  }
+
+  // No external load tracked on one or both sides (e.g. bodyweight) — compare
+  // reps, then sets, the same way a bodyweight lifter actually progresses.
+  const curReps = current.averageReps ?? 0;
+  const prevReps = previous.averageReps ?? 0;
+  const changeReps = round1(curReps - prevReps);
+  if (changeReps > 0) {
+    return {
+      status: "progressed",
+      explanation: `Average reps up ${previous.averageReps} → ${current.averageReps}.`,
+      changeWeightKg: null,
+      changeReps,
+      changeSets: null,
+    };
+  }
+  if (changeReps < 0) {
+    return {
+      status: "decreased",
+      explanation: `Average reps down ${previous.averageReps} → ${current.averageReps}.`,
+      changeWeightKg: null,
+      changeReps,
+      changeSets: null,
+    };
+  }
+  if (changeSets > 0) {
+    return {
+      status: "progressed",
+      explanation: `Same reps, more sets (${current.completedSets} vs ${previous.completedSets}).`,
+      changeWeightKg: null,
+      changeReps: 0,
+      changeSets,
+    };
+  }
+  if (changeSets < 0) {
+    return {
+      status: "decreased",
+      explanation: `Same reps, fewer sets (${current.completedSets} vs ${previous.completedSets}).`,
+      changeWeightKg: null,
+      changeReps: 0,
+      changeSets,
+    };
+  }
+  return {
+    status: "maintained",
+    explanation: "Same reps and sets as last time.",
+    changeWeightKg: null,
+    changeReps: 0,
+    changeSets: 0,
+  };
+}
+
+export type ProgressBoardPeriod = "this_week" | "last_week" | "this_month";
+
+export interface ProgressBoardWindow {
+  currentFrom: string;
+  currentTo: string;
+  previousFrom: string;
+  previousTo: string;
+  label: string;
+}
+
+// Local-calendar-day key (not toISOString, which is UTC and can land on the
+// wrong day for anyone east of UTC near midnight) — matches how the rest of
+// the app keys dates (nutrition.ts's resolveRange uses date-fns format() on
+// local Date objects for the same reason).
+function toDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function mondayOf(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = (day + 6) % 7; // days since Monday
+  d.setDate(d.getDate() - diff);
+  return d;
+}
+
+function addDays(date: Date, days: number): Date {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function startOfCalendarMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function endOfCalendarMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+}
+
+/**
+ * Resolves the two comparable windows for a board period, always comparing
+ * against the immediately-preceding period of the same length. Takes `now`
+ * explicitly (rather than reading the clock internally) so it's testable.
+ */
+export function resolveProgressBoardWindow(
+  period: ProgressBoardPeriod,
+  now: Date,
+): ProgressBoardWindow {
+  if (period === "this_week") {
+    const from = mondayOf(now);
+    const prevFrom = addDays(from, -7);
+    const prevTo = addDays(from, -1);
+    return {
+      currentFrom: toDateKey(from),
+      currentTo: toDateKey(now),
+      previousFrom: toDateKey(prevFrom),
+      previousTo: toDateKey(prevTo),
+      label: "This week vs last week",
+    };
+  }
+  if (period === "last_week") {
+    const thisMonday = mondayOf(now);
+    const from = addDays(thisMonday, -7);
+    const to = addDays(thisMonday, -1);
+    const prevFrom = addDays(from, -7);
+    const prevTo = addDays(from, -1);
+    return {
+      currentFrom: toDateKey(from),
+      currentTo: toDateKey(to),
+      previousFrom: toDateKey(prevFrom),
+      previousTo: toDateKey(prevTo),
+      label: "Last week vs the week before",
+    };
+  }
+  const from = startOfCalendarMonth(now);
+  const prevMonthAnchor = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const prevFrom = startOfCalendarMonth(prevMonthAnchor);
+  const prevTo = endOfCalendarMonth(prevMonthAnchor);
+  return {
+    currentFrom: toDateKey(from),
+    currentTo: toDateKey(now),
+    previousFrom: toDateKey(prevFrom),
+    previousTo: toDateKey(prevTo),
+    label: "This month vs last month",
   };
 }
