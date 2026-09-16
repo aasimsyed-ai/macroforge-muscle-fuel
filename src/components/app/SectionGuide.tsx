@@ -10,6 +10,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { HalkuAvatar } from "@/components/halku/HalkuAvatar";
+import { getHalkuGender } from "@/lib/halku/preferences";
 import {
   hasSeenSectionGuide,
   markSectionGuideSeen,
@@ -23,10 +25,14 @@ import {
  * seen on this device, and otherwise only on request. One compact screen (a
  * short intro + a term/meaning glossary + "do this first"), not a multi-step
  * wizard — concise by design, distinct from the one-time app-wide
- * `OnboardingIntro`.
+ * `OnboardingIntro`. Shows a small Halku avatar in the header purely to
+ * visually tie this tip sheet to the same character as the chat panel
+ * (reusing the same stored gender preference) — it's still the same
+ * concise glossary content, not a rebuilt/duplicated onboarding tour.
  */
 export function SectionGuide({ section }: { section: GuideSectionId }) {
   const [open, setOpen] = useState(false);
+  const [gender] = useState(() => getHalkuGender());
   const content = SECTION_GUIDES[section];
 
   useEffect(() => {
@@ -56,8 +62,13 @@ export function SectionGuide({ section }: { section: GuideSectionId }) {
       <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : dismiss())}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>{content.title}</DialogTitle>
-            <DialogDescription>{content.intro}</DialogDescription>
+            <div className="flex items-center gap-2">
+              <HalkuAvatar gender={gender} className="size-9 shrink-0" />
+              <div className="min-w-0 flex-1 text-left">
+                <DialogTitle>{content.title}</DialogTitle>
+                <DialogDescription>{content.intro}</DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
 
           <ul className="max-h-64 space-y-2 overflow-y-auto text-sm">

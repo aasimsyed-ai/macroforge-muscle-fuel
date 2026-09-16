@@ -110,7 +110,7 @@ export function HalkuPanel() {
         <DialogContent className="flex max-h-[85vh] max-w-sm flex-col gap-3">
           <DialogHeader>
             <div className="flex items-center gap-2">
-              <HalkuAvatar gender={gender} className="size-9 shrink-0" />
+              <HalkuAvatar gender={gender} className="size-12 shrink-0" />
               <div className="min-w-0 flex-1 text-left">
                 <DialogTitle>Halku · Personal AI Trainer</DialogTitle>
                 <p className="text-xs text-muted-foreground">

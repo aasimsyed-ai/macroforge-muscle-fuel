@@ -1,24 +1,37 @@
 import type { HalkuGender } from "@/lib/halku/types";
+import { cn } from "@/lib/utils";
 import { HALKU_CHARACTER_ART } from "./halkuAssets";
 
 /**
- * Halku's visual mark. Renders the approved character illustration from
- * `halkuAssets.ts` the moment one is dropped in there — today both paths are
- * `null`, so every call falls through to the abstract placeholder below
- * (rounded head + strong shoulders + a small spark accent, echoing the app's
- * own Flame mark for a family resemblance). That placeholder is NOT the
- * final character art — it's deliberately basic, since producing a
- * polished, illustrated superhero character needs a real illustrator or an
- * image-generation tool, neither available in this environment. Documented
- * as a known gap rather than faked; see `halkuAssets.ts` for exactly what's
- * needed and where it plugs in. The two `gender` variants share the same
- * silhouette/colors and differ only in a small, non-stereotyped hair shape,
- * per "equally strong and confident, not a recolor."
+ * Halku's visual mark. Renders the approved character photo from
+ * `halkuAssets.ts` whenever one is set for the given gender — the real
+ * artwork is the product identity now, never the placeholder, as long as an
+ * asset path exists. Falls through to the abstract SVG below only if a path
+ * is `null` (e.g. a future gender variant without art yet).
+ *
+ * The source photos are full-body 2:3 portraits, so a plain <img> squashed
+ * into a small square/circle would barely show a face. Instead this crops
+ * with `object-fit: cover` + `object-position: top` inside a clipped,
+ * `className`-sized frame — anchoring to the top of the source image always
+ * surfaces the head and shoulders first, staying recognizable down to the
+ * smallest (floating-launcher) size, and revealing a bit more of the
+ * branded outfit at larger sizes (e.g. the chat panel header) without ever
+ * needing a different crop per call site.
  */
 export function HalkuAvatar({ gender, className }: { gender: HalkuGender; className?: string }) {
   const artSrc = HALKU_CHARACTER_ART[gender];
   if (artSrc) {
-    return <img src={artSrc} alt="Halku, personal AI trainer" className={className} />;
+    return (
+      <span
+        className={cn("relative inline-block overflow-hidden rounded-full bg-black/80", className)}
+      >
+        <img
+          src={artSrc}
+          alt="Halku, personal AI trainer"
+          className="size-full object-cover object-top"
+        />
+      </span>
+    );
   }
 
   return (
