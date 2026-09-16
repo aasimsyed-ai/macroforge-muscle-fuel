@@ -14,21 +14,40 @@ export type HalkuGuidanceState =
   "idle" | "thinking" | "explaining" | "encouraging" | "celebrating" | "concerned" | "guiding";
 
 /**
- * Halku's visual mark — a compact standing character, not a passport-photo
- * headshot. The source art is a full-body 2:3 portrait; the avatar's own
- * container is sized to that same 2:3 ratio (see the `w-*`/`h-*` pairs at
- * each call site, e.g. `w-16 h-24`) so `object-fit: cover` shows the whole
- * figure — head to shoes — with no cropping and no letterboxing, framed in a
- * soft rounded card rather than a circle. A tall aspect ratio is required
- * for this effect; a square/circular `className` here falls back to
- * cropping to the head, which is what call sites that genuinely want a
- * small round badge (none currently) would still get.
+ * Halku's visual mark — a free-standing character, not a photo in a card.
+ * The source PNGs have a solid black backdrop baked in (verified by
+ * sampling pixels: fully opaque (0,0,0,255) for the masculine art; the
+ * feminine art already has real alpha-transparent corners). `mix-blend-mode:
+ * screen` looks like it solves this in isolation, but it doesn't actually
+ * work on a genuinely opaque image — per the CSS Compositing spec, a
+ * blended element composites against whatever has already been painted
+ * *within its own stacking context*, not simply "the page behind it"; with
+ * nothing else painted there first, an opaque black pixel has nothing to
+ * blend with and paints as plain opaque black — reproduced live as a
+ * visible black box specifically on the masculine asset (whose PNG has no
+ * real transparency), while the feminine asset looked fine only because
+ * its own alpha channel was already doing the work.
  *
- * `interactive` adds the idle "alive" motion and hover/press reaction used
- * for the floating launcher; other call sites (chat header, Quick Guide)
- * render the same art perfectly still, since a person-sized breathing
- * animation next to body text would be distracting rather than premium.
- * Both respect `prefers-reduced-motion`.
+ * The actual fix: an SVG luminance-key filter (`#halku-key-filter` below)
+ * that recomputes each pixel's alpha from its own brightness — reading
+ * only R/G/B, ignoring whatever alpha the source already had, so it works
+ * identically for a fully-opaque PNG and one with real transparency. Truly
+ * black pixels (the backdrop) become fully transparent; the character's
+ * own colors (green skin, bright accents) stay opaque. This is a display-
+ * time filter only — the PNG files themselves are never touched.
+ * `object-fit: contain` keeps the full figure — head to feet — intact at
+ * any container size, no cropping.
+ *
+ * `interactive` adds the idle "alive" motion, hover/press reaction, and a
+ * soft blurred glow (a separate blob behind the character, never a hard-
+ * edged ring/border) used for the floating launcher; other call sites
+ * (chat header, Quick Guide) use `HalkuHeadshot` instead, unaffected by any
+ * of this. Both animations respect `prefers-reduced-motion`, and live on a
+ * wrapper `<span>` rather than the filtered `<img>` itself — an animated
+ * `transform` directly on a filtered/blended element risks the same "loses
+ * its real backdrop" class of bug the SVG filter approach otherwise avoids
+ * (reproduced once already with the blend-mode attempt; kept this
+ * separation as a precaution since it costs nothing).
  *
  * The hover/press reaction is a brief rotation-and-settle "lean in and nod"
  * (`halku-greet`, `transform-origin: bottom` so the character pivots from
@@ -53,17 +72,39 @@ export function HalkuAvatar({
   const artSrc = HALKU_CHARACTER_ART[gender];
   if (artSrc) {
     return (
-      <span
-        role="img"
-        aria-label="Halku, personal AI trainer"
-        className={cn(
-          "relative inline-block shrink-0 origin-bottom overflow-hidden rounded-2xl bg-black/80 bg-cover bg-top",
-          interactive &&
-            "motion-safe:animate-[halku-breathe_4.5s_ease-in-out_infinite] motion-safe:group-hover:animate-[halku-greet_0.6s_ease-out_forwards] motion-safe:group-active:animate-[halku-greet_0.45s_ease-out_forwards]",
-          className,
-        )}
-        style={{ backgroundImage: `url(${artSrc})` }}
-      />
+      <span className={cn("relative inline-block shrink-0", className)}>
+        <svg width="0" height="0" className="absolute" aria-hidden="true">
+          <defs>
+            <filter id="halku-key-filter" colorInterpolationFilters="sRGB">
+              {/* Keep R/G/B unchanged; alpha becomes each pixel's own
+                  brightness (ignoring source alpha entirely), so a solid
+                  black background — opaque or not — becomes transparent
+                  while the character's own colors stay visible. */}
+              <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  6 6 6 0 0" />
+            </filter>
+          </defs>
+        </svg>
+        {interactive ? (
+          <span
+            aria-hidden="true"
+            className="absolute inset-x-[10%] inset-y-[15%] -z-10 rounded-full bg-primary/0 blur-2xl transition-colors duration-300 group-hover:bg-primary/25"
+          />
+        ) : null}
+        <span
+          className={cn(
+            "block size-full origin-bottom",
+            interactive &&
+              "motion-safe:animate-[halku-breathe_4.5s_ease-in-out_infinite] motion-safe:group-hover:animate-[halku-greet_0.6s_ease-out_forwards] motion-safe:group-active:animate-[halku-greet_0.45s_ease-out_forwards]",
+          )}
+        >
+          <img
+            src={artSrc}
+            alt="Halku, personal AI trainer"
+            className="size-full object-contain"
+            style={{ filter: "url(#halku-key-filter)" }}
+          />
+        </span>
+      </span>
     );
   }
 

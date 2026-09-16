@@ -136,30 +136,35 @@ export function HalkuPanel() {
 
   return (
     <>
-      {/* The launcher is a compact standing character, not a round profile
-          photo — the outer wrapper carries the fixed position/z-index/tap
-          target and a soft "ground shadow" ellipse; the inner button is
-          sized to the source art's own 2:3 ratio (width:height) at every
-          breakpoint so the whole figure shows with no cropping. Sized to be
-          clearly noticeable — ~120px tall on mobile, ~168px on larger
-          screens — while staying a fixed corner element that can't cause
-          horizontal scrolling or sit over other controls. */}
+      {/* The launcher is a free-standing character — no card, box, or frame
+          (see HalkuAvatar's own doc comment for how the source art's flat
+          backdrop is made to disappear against this dark UI). The outer
+          wrapper carries the fixed position/z-index/tap target and a soft
+          ground-shadow ellipse; the button is sized to the source art's own
+          2:3 ratio at every breakpoint so the whole figure — head to feet —
+          shows with no cropping. Sized to be clearly noticeable — ~136px
+          tall on mobile, ~188px on larger screens — while staying a fixed
+          corner element that can't cause horizontal scrolling or sit over
+          other controls. The native `title` tooltip (desktop hover) and
+          `aria-label` (screen readers/mobile) are what say what Halku is —
+          intentionally not a permanent on-screen label, so nothing else
+          about the character's presentation implies a UI chrome element. */}
       <div className="fixed bottom-24 right-3 z-40 sm:bottom-8 sm:right-5">
         <div
-          className="pointer-events-none absolute inset-x-2 bottom-0 h-2.5 rounded-full bg-black/40 blur-sm sm:inset-x-3"
+          className="pointer-events-none absolute inset-x-3 bottom-0 h-2 rounded-full bg-black/40 blur-sm sm:inset-x-4"
           aria-hidden="true"
         />
         <button
           type="button"
           onClick={() => setOpen(true)}
-          aria-label="Open Halku — your Personal AI Trainer and in-app helper"
-          title="Halku · Personal AI Trainer"
-          className="group relative block h-[120px] w-20 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:h-[168px] sm:w-28"
+          aria-label="Open Halku — your Personal AI Trainer and guide for using Muscle Fuel"
+          title={"Halku\nPersonal AI Trainer\nAsk Halku anything"}
+          className="group relative block h-[136px] w-[91px] cursor-pointer rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:h-[188px] sm:w-[125px]"
         >
           <HalkuAvatar
             gender={gender}
             interactive
-            className="h-[120px] w-20 shadow-xl shadow-primary/10 ring-1 ring-primary/30 group-hover:shadow-primary/30 group-hover:ring-primary/60 sm:h-[168px] sm:w-28"
+            className="h-[136px] w-[91px] sm:h-[188px] sm:w-[125px]"
           />
         </button>
       </div>
