@@ -71,12 +71,16 @@ Deno.serve(async (req: Request) => {
         ],
       },
     ],
-    generationConfig: { temperature: 0.6, maxOutputTokens: 220 },
+    generationConfig: {
+      temperature: 0.6,
+      maxOutputTokens: 2048,
+      thinkingConfig: { thinkingBudget: 0 },
+    },
   };
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "content-type": "application/json" },
