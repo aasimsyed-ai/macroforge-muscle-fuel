@@ -28,6 +28,10 @@ describe("classifyHalkuQuestion", () => {
     ["Increase my bicep weight", "action_request"],
     ["Change my protein target", "action_request"],
     ["Why didn't you increase my bicep weight?", "why_progression_status"],
+    ["How do I collapse an exercise?", "how_to_collapse_exercise"],
+    ["What does Equipment do?", "define_equipment_field"],
+    ["How do I save a meal?", "how_to_save_meal"],
+    ["What should I do if I am too fatigued to increase the weight?", "fatigue_guidance"],
   ])("classifies %j as %s", (question, expected) => {
     expect(classifyHalkuQuestion(question).kind).toBe(expected);
   });
@@ -76,6 +80,32 @@ describe("buildHalkuAnswer — action requests are honest, never claim to have a
     const answer = buildHalkuAnswer({ kind: "how_to_add_set" }, empty);
     expect(answer.grounded).toBe(false);
     expect(answer.text.toLowerCase()).toContain("add set");
+  });
+
+  it("explains how to collapse/expand an exercise and confirms data is preserved", () => {
+    const answer = buildHalkuAnswer({ kind: "how_to_collapse_exercise" }, empty);
+    expect(answer.grounded).toBe(false);
+    expect(answer.text.toLowerCase()).toContain("collapse");
+    expect(answer.text.toLowerCase()).toContain("lost");
+  });
+
+  it("explains what the Equipment field does", () => {
+    const answer = buildHalkuAnswer({ kind: "define_equipment_field" }, empty);
+    expect(answer.grounded).toBe(false);
+    expect(answer.text.toLowerCase()).toContain("equipment");
+  });
+
+  it("gives direct steps for saving a meal, distinct from the homemade-specific answer", () => {
+    const answer = buildHalkuAnswer({ kind: "how_to_save_meal" }, empty);
+    expect(answer.grounded).toBe(false);
+    expect(answer.text.toLowerCase()).toContain("save");
+  });
+
+  it("gives real coaching guidance for fatigue, not a generic refusal", () => {
+    const answer = buildHalkuAnswer({ kind: "fatigue_guidance" }, empty);
+    expect(answer.grounded).toBe(false);
+    expect(answer.text.toLowerCase()).not.toContain("not confident");
+    expect(answer.text.toLowerCase()).toContain("recover");
   });
 });
 

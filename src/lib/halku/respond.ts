@@ -17,8 +17,12 @@ export type HalkuIntentKind =
   | "define_rir_rpe"
   | "define_rest"
   | "define_weight_field"
+  | "define_equipment_field"
   | "how_to_log_homemade_food"
+  | "how_to_save_meal"
   | "how_to_add_set"
+  | "how_to_collapse_exercise"
+  | "fatigue_guidance"
   | "why_protein_target"
   | "why_progression_status"
   | "action_request"
@@ -93,6 +97,18 @@ export function classifyHalkuQuestion(raw: string): HalkuIntent {
   }
   if (
     includesAny(text, [
+      "what does equipment",
+      "what is equipment",
+      "equipment do",
+      "equipment mean",
+      "equipment field",
+      "equipment option",
+    ])
+  ) {
+    return { kind: "define_equipment_field" };
+  }
+  if (
+    includesAny(text, [
       "homemade",
       "home cooked",
       "home-cooked",
@@ -103,8 +119,38 @@ export function classifyHalkuQuestion(raw: string): HalkuIntent {
   ) {
     return { kind: "how_to_log_homemade_food" };
   }
+  // Deliberately distinct from how_to_log_homemade_food above (a specific
+  // case of this) and from action_request's "save this meal"/"save my
+  // meal" (an imperative asking Halku to act right now) — "how do I save a
+  // meal" / "save a meal" is a general how-to question about the ordinary
+  // Add Meal flow, not a request to perform anything.
+  if (includesAny(text, ["how do i save", "how to save a meal", "save a meal"])) {
+    return { kind: "how_to_save_meal" };
+  }
   if (includesAny(text, ["add a set", "add another set", "how do i add a set", "new set"])) {
     return { kind: "how_to_add_set" };
+  }
+  if (
+    includesAny(text, [
+      "collapse an exercise",
+      "collapse exercise",
+      "expand an exercise",
+      "how do i collapse",
+      "how do i expand",
+    ])
+  ) {
+    return { kind: "how_to_collapse_exercise" };
+  }
+  if (
+    includesAny(text, [
+      "too fatigued",
+      "too tired to",
+      "fatigued to increase",
+      "not recovered",
+      "not fully recovered",
+    ])
+  ) {
+    return { kind: "fatigue_guidance" };
   }
   // Checked before action_request below: "why" is the unambiguous signal
   // that this is a question about a past/current status, not a request to
@@ -250,15 +296,35 @@ export function buildHalkuAnswer(intent: HalkuIntent, data: HalkuKnownData): Hal
         grounded: false,
         text: "Enter the load you actually lifted for that set, in kilograms — the weight on the bar, machine or dumbbells, not your own bodyweight. For a bodyweight exercise, only fill it in if you added extra weight (a vest, a belt, a plate).",
       };
+    case "define_equipment_field":
+      return {
+        grounded: false,
+        text: 'Equipment is optional — it just narrows which exercise variants show up for that muscle group (e.g. barbell vs. dumbbell vs. machine), so you find the right one faster. Leave it as "Not specified" if you\'re not sure.',
+      };
     case "how_to_log_homemade_food":
       return {
         grounded: false,
         text: 'Type what you made in the Food name field — e.g. "chicken curry with rice" — and the estimate is calculated from the description. You can also attach a photo or use the mic, and every number stays editable before you save.',
       };
+    case "how_to_save_meal":
+      return {
+        grounded: false,
+        text: "**Add Meal** → enter the food name and serving → review the estimated calories/macros (edit any of them if they're off) → **Save**. It's added to today's log immediately.",
+      };
     case "how_to_add_set":
       return {
         grounded: false,
         text: "Tap **Add set** below that exercise's existing sets. The new set starts pre-filled with your last set's weight and rest time, so you usually only need to adjust reps.",
+      };
+    case "how_to_collapse_exercise":
+      return {
+        grounded: false,
+        text: "Tap the exercise's own header (or the chevron next to it) to collapse or expand it. Collapsing just hides the sets from view — nothing you've entered is lost, and re-tapping brings it right back.",
+      };
+    case "fatigue_guidance":
+      return {
+        grounded: false,
+        text: "Don't force a heavier weight through real fatigue — that's how form breaks down and injuries happen. Repeat the same weight this session instead, prioritize sleep and protein, and if you're still not recovering after a few sessions, treat it as a deload week (lighter load or a session or two off) rather than pushing through.",
       };
     case "action_request":
       return { grounded: false, text: actionRequestAnswer(intent.actionTarget ?? "food") };
