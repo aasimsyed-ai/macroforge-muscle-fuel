@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { HalkuAvatar } from "@/components/halku/HalkuAvatar";
+import { HalkuHeadshot } from "@/components/halku/HalkuAvatar";
 import { getHalkuGender } from "@/lib/halku/preferences";
 import {
   hasSeenSectionGuide,
@@ -63,7 +63,7 @@ export function SectionGuide({ section }: { section: GuideSectionId }) {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <div className="flex items-center gap-2">
-              <HalkuAvatar gender={gender} className="size-10 shrink-0" />
+              <HalkuHeadshot gender={gender} className="size-10 shrink-0" />
               <div className="min-w-0 flex-1 text-left">
                 <p className="text-[10px] font-medium uppercase tracking-wide text-primary">
                   Halku's quick guide

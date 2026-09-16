@@ -14,7 +14,8 @@ import type { HalkuGender, HalkuKnownData, HalkuMessage } from "@/lib/halku/type
 import { sumMeals } from "@/lib/nutrition";
 import { useExerciseProgressBoard } from "@/lib/workouts/hooks";
 
-import { HalkuAvatar } from "./HalkuAvatar";
+import { HalkuAvatar, HalkuHeadshot } from "./HalkuAvatar";
+import { HalkuMessageContent } from "./HalkuMessageContent";
 
 // Compact chip label vs. the full question actually sent — keeps the quick-
 // question row scannable and not wrapped in a wall of text on small screens
@@ -29,6 +30,11 @@ const QUICK_QUESTIONS: ReadonlyArray<{ label: string; question: string }> = [
     label: "Why not more weight on biceps?",
     question: "Why didn't you recommend increasing my bicep weight?",
   },
+];
+
+const GENDER_OPTIONS: ReadonlyArray<{ value: HalkuGender; label: string }> = [
+  { value: "masculine", label: "Male" },
+  { value: "feminine", label: "Female" },
 ];
 
 function uid(): string {
@@ -59,8 +65,7 @@ export function HalkuPanel() {
   const todayMeals = useMeals(todayRange.from, todayRange.to, { enabled: open });
   const progressBoard = useExerciseProgressBoard("this_week", { enabled: open && !isGuest });
 
-  function toggleGender() {
-    const next: HalkuGender = gender === "masculine" ? "feminine" : "masculine";
+  function selectGender(next: HalkuGender) {
     setGender(next);
     setHalkuGender(next);
   }
@@ -118,35 +123,62 @@ export function HalkuPanel() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label="Open Halku, your personal AI trainer"
-        className="fixed bottom-20 right-4 z-40 flex size-14 items-center justify-center rounded-full border-2 border-primary/40 bg-card shadow-xl shadow-primary/10 transition-transform hover:scale-105 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:bottom-6"
-      >
-        <HalkuAvatar gender={gender} className="size-11" />
-      </button>
+      {/* The launcher is a compact standing character, not a round profile
+          photo — the outer wrapper carries the fixed position/z-index/tap
+          target and a soft "ground shadow" ellipse; the inner button is
+          sized to the source art's own 2:3 ratio so no cropping happens. */}
+      <div className="fixed bottom-20 right-4 z-40 sm:bottom-6">
+        <div
+          className="pointer-events-none absolute inset-x-1 bottom-0 h-2 rounded-full bg-black/40 blur-sm"
+          aria-hidden="true"
+        />
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label="Open Halku, your personal AI trainer"
+          className="group relative block h-24 w-16 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        >
+          <HalkuAvatar
+            gender={gender}
+            interactive
+            className="h-24 w-16 shadow-xl shadow-primary/10 ring-1 ring-primary/30 group-hover:shadow-primary/30 group-hover:ring-primary/60"
+          />
+        </button>
+      </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="flex max-h-[85vh] max-w-sm flex-col gap-3">
+        <DialogContent className="flex h-[min(32rem,90vh)] w-[calc(100vw-2rem)] max-w-md flex-col gap-3 sm:max-w-lg">
           <DialogHeader>
             <div className="flex items-center gap-2">
-              <HalkuAvatar gender={gender} className="size-12 shrink-0" />
+              <HalkuHeadshot gender={gender} className="size-12 shrink-0" />
               <div className="min-w-0 flex-1 text-left">
                 <DialogTitle className="text-base leading-tight">Halku</DialogTitle>
                 <p className="text-[11px] font-medium uppercase tracking-wide text-primary">
                   Personal AI Trainer
                 </p>
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={toggleGender}
-                className="shrink-0 text-xs"
+              <div
+                role="radiogroup"
+                aria-label="Halku's appearance"
+                className="flex shrink-0 gap-0.5 rounded-full bg-secondary p-0.5 text-xs"
               >
-                {gender === "masculine" ? "Masc." : "Fem."}
-              </Button>
+                {GENDER_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={gender === option.value}
+                    onClick={() => selectGender(option.value)}
+                    className={`rounded-full px-2.5 py-1 font-medium transition-colors ${
+                      gender === option.value
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </DialogHeader>
 
@@ -174,7 +206,11 @@ export function HalkuPanel() {
                       Your data
                     </Badge>
                   ) : null}
-                  <p>{message.text}</p>
+                  {message.role === "halku" ? (
+                    <HalkuMessageContent text={message.text} />
+                  ) : (
+                    <p>{message.text}</p>
+                  )}
                 </div>
               ))
             )}
@@ -217,7 +253,13 @@ export function HalkuPanel() {
               aria-label="Ask Halku"
               disabled={sending}
             />
-            <Button type="submit" size="icon" disabled={sending || !input.trim()} aria-label="Send">
+            <Button
+              type="submit"
+              size="icon"
+              disabled={sending || !input.trim()}
+              aria-label="Send"
+              className="shrink-0 transition-transform active:scale-90"
+            >
               <Send className="size-4" />
             </Button>
           </form>
