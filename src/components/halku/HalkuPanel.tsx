@@ -165,7 +165,11 @@ export function HalkuPanel() {
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="flex h-[min(32rem,90vh)] w-[calc(100vw-2rem)] max-w-md flex-col gap-3 sm:max-w-lg">
+        {/* No fixed height here on purpose — with only the empty-state or a
+            couple of messages, the dialog should hug its actual content
+            instead of reserving a tall, mostly-blank rectangle. `max-h`
+            only caps it once there's enough conversation to need one. */}
+        <DialogContent className="flex max-h-[85vh] w-[calc(100vw-2rem)] max-w-md flex-col gap-3 sm:max-w-lg">
           <DialogHeader>
             <div className="flex items-center gap-2">
               <HalkuHeadshot gender={gender} className="size-12 shrink-0" />
@@ -200,7 +204,12 @@ export function HalkuPanel() {
             </div>
           </DialogHeader>
 
-          <div className="flex-1 space-y-2 overflow-y-auto rounded-md bg-secondary/40 p-2">
+          {/* No `flex-1` — that forces this to fill all remaining dialog
+              height even for one short message. Instead it grows with its
+              actual content up to `max-h`, then scrolls internally, so the
+              input row below always stays right under the conversation
+              instead of pinned to the bottom of a mostly-empty box. */}
+          <div className="max-h-[50vh] min-h-12 space-y-2 overflow-y-auto rounded-md bg-secondary/40 p-2">
             {messages.length === 0 ? (
               <p className="p-2 text-xs text-muted-foreground">
                 {isGuest

@@ -19,6 +19,15 @@ describe("classifyHalkuQuestion", () => {
     ["What does RPE mean?", "define_rir_rpe"],
     ["", "unknown"],
     ["What does this option do?", "unknown"],
+    ["What does this do?", "unknown"],
+    ["How do I add a set?", "how_to_add_set"],
+    ["Can you add my today's meals to the food section?", "action_request"],
+    ["Add my workout", "action_request"],
+    ["Log my meal", "action_request"],
+    ["Save this meal", "action_request"],
+    ["Increase my bicep weight", "action_request"],
+    ["Change my protein target", "action_request"],
+    ["Why didn't you increase my bicep weight?", "why_progression_status"],
   ])("classifies %j as %s", (question, expected) => {
     expect(classifyHalkuQuestion(question).kind).toBe(expected);
   });
@@ -31,6 +40,42 @@ describe("classifyHalkuQuestion", () => {
   it("returns no muscle-group hint when none is named", () => {
     const intent = classifyHalkuQuestion("Why did my progression change?");
     expect(intent.muscleGroupHint).toBeUndefined();
+  });
+
+  it.each([
+    ["Can you add my today's meals to the food section?", "food"],
+    ["Add my workout", "workout"],
+    ["Log my meal", "food"],
+    ["Increase my bicep weight", "workout"],
+    ["Change my protein target", "goal"],
+  ])("tags %j with actionTarget %s", (question, expectedTarget) => {
+    const intent = classifyHalkuQuestion(question);
+    expect(intent.kind).toBe("action_request");
+    expect(intent.actionTarget).toBe(expectedTarget);
+  });
+});
+
+describe("buildHalkuAnswer — action requests are honest, never claim to have acted", () => {
+  const empty: HalkuKnownData = {};
+
+  it.each(["food", "workout", "goal"] as const)(
+    "states the capability limit and gives real steps for actionTarget %s",
+    (actionTarget) => {
+      const answer = buildHalkuAnswer({ kind: "action_request", actionTarget }, empty);
+      expect(answer.grounded).toBe(false);
+      expect(answer.text.toLowerCase()).toContain("can't");
+      // A numbered step list must actually be present.
+      expect(answer.text).toMatch(/1\./);
+      // Must never imply the action already happened.
+      expect(answer.text.toLowerCase()).not.toContain("i've added");
+      expect(answer.text.toLowerCase()).not.toContain("done!");
+    },
+  );
+
+  it("gives concise, direct steps for adding a set", () => {
+    const answer = buildHalkuAnswer({ kind: "how_to_add_set" }, empty);
+    expect(answer.grounded).toBe(false);
+    expect(answer.text.toLowerCase()).toContain("add set");
   });
 });
 

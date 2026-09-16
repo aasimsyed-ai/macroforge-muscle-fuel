@@ -18,15 +18,23 @@ export type HalkuIntentKind =
   | "define_rest"
   | "define_weight_field"
   | "how_to_log_homemade_food"
+  | "how_to_add_set"
   | "why_protein_target"
   | "why_progression_status"
+  | "action_request"
   | "greeting"
   | "unknown";
+
+/** Which part of the app an action_request is actually about, so the steps
+ * Halku offers point somewhere real instead of a generic "open the app". */
+export type HalkuActionTarget = "food" | "workout" | "goal";
 
 export interface HalkuIntent {
   kind: HalkuIntentKind;
   /** A canonical muscle-group name extracted from the question, if any. */
   muscleGroupHint?: string;
+  /** Only set for "action_request" — see HalkuActionTarget. */
+  actionTarget?: HalkuActionTarget;
 }
 
 const MUSCLE_GROUP_KEYWORDS: ReadonlyArray<{ keywords: string[]; group: string }> = [
@@ -95,19 +103,68 @@ export function classifyHalkuQuestion(raw: string): HalkuIntent {
   ) {
     return { kind: "how_to_log_homemade_food" };
   }
+  if (includesAny(text, ["add a set", "add another set", "how do i add a set", "new set"])) {
+    return { kind: "how_to_add_set" };
+  }
+  // Checked before action_request below: "why" is the unambiguous signal
+  // that this is a question about a past/current status, not a request to
+  // do something right now. Without this, "Why didn't you increase my
+  // bicep weight?" would match action_request's own "increase my" pattern
+  // and get a capability-limit answer instead of the real, data-grounded
+  // explanation it's actually asking for.
+  if (includesAny(text, ["why didn't you", "why did my"])) {
+    const muscleGroupHint = extractMuscleGroupHint(text);
+    return muscleGroupHint
+      ? { kind: "why_progression_status", muscleGroupHint }
+      : { kind: "why_progression_status" };
+  }
+  // Requests for Halku to actually perform/change something — it can't (v1
+  // has no write access to any table), so this exists purely to answer
+  // honestly with the shortest real path, never to pretend the action
+  // happened. Checked before why_protein_target below on purpose: e.g.
+  // "Change my protein target" would otherwise match why_protein_target's
+  // own "protein target" keyword and get a status explanation instead of
+  // the capability-limit + steps this actually needs.
+  if (
+    includesAny(text, [
+      "add my",
+      "add today",
+      "log my meal",
+      "log my workout",
+      "save this meal",
+      "save my meal",
+      "increase my",
+      "change my protein",
+      "change my target",
+      "update my target",
+      "update my goal",
+    ])
+  ) {
+    const isWorkoutAction = includesAny(text, [
+      "workout",
+      "set",
+      "weight",
+      "exercise",
+      "rep",
+      "bicep",
+      "tricep",
+      "chest",
+      "leg",
+      "back",
+      "shoulder",
+    ]);
+    const isGoalAction = includesAny(text, ["target", "goal"]);
+    const actionTarget: HalkuActionTarget = isGoalAction
+      ? "goal"
+      : isWorkoutAction
+        ? "workout"
+        : "food";
+    return { kind: "action_request", actionTarget };
+  }
   if (includesAny(text, ["protein target", "protein goal", "why is my protein"])) {
     return { kind: "why_protein_target" };
   }
-  if (
-    includesAny(text, [
-      "progress",
-      "progression",
-      "increase",
-      "recommend",
-      "why didn't you",
-      "why did my",
-    ])
-  ) {
+  if (includesAny(text, ["progress", "progression", "recommend"])) {
     const muscleGroupHint = extractMuscleGroupHint(text);
     return muscleGroupHint
       ? { kind: "why_progression_status", muscleGroupHint }
@@ -125,6 +182,45 @@ const STATUS_LABEL: Record<string, string> = {
   decreased: "Decreased",
   insufficient_data: "Not enough data yet",
 };
+
+/**
+ * Halku v1 has no write access to any table — it can only ever explain, never
+ * perform, an action the user asks for. Answers honestly with the shortest
+ * real path instead of a flat refusal, and never implies the action already
+ * happened. Text is plain sentences + a numbered list, matching exactly what
+ * HalkuMessageContent already renders (no new markup needed).
+ */
+function actionRequestAnswer(target: HalkuActionTarget): string {
+  if (target === "workout") {
+    return [
+      "I can't log or change your workout data for you — I don't have write access yet. Here's the fastest way yourself:",
+      "1. Open Workout.",
+      "2. Log Workout (or Add set on an exercise you already logged).",
+      "3. Enter the weight, reps and sets.",
+      "4. Save.",
+      "Want help with any of these steps?",
+    ].join("\n");
+  }
+  if (target === "goal") {
+    return [
+      "I can't change your targets for you — here's the fastest way yourself:",
+      "1. Open Settings.",
+      "2. Find the target you want to change (e.g. protein).",
+      "3. Enter the new value.",
+      "4. Save.",
+      "Want help with any of these steps?",
+    ].join("\n");
+  }
+  return [
+    "I can't add them for you yet. I can guide you through it:",
+    "1. Open Food.",
+    "2. Choose Today.",
+    "3. Tap Add Meal.",
+    "4. Add or review your meals.",
+    "5. Save.",
+    "Want me to guide you through it?",
+  ].join("\n");
+}
 
 /** Assembles the final answer text. Pure given the intent and the data passed in. */
 export function buildHalkuAnswer(intent: HalkuIntent, data: HalkuKnownData): HalkuAnswer {
@@ -159,6 +255,13 @@ export function buildHalkuAnswer(intent: HalkuIntent, data: HalkuKnownData): Hal
         grounded: false,
         text: 'Type what you made in the Food name field — e.g. "chicken curry with rice" — and the estimate is calculated from the description. You can also attach a photo or use the mic, and every number stays editable before you save.',
       };
+    case "how_to_add_set":
+      return {
+        grounded: false,
+        text: "Tap **Add set** below that exercise's existing sets. The new set starts pre-filled with your last set's weight and rest time, so you usually only need to adjust reps.",
+      };
+    case "action_request":
+      return { grounded: false, text: actionRequestAnswer(intent.actionTarget ?? "food") };
     case "why_protein_target":
       if (data.today) {
         return {
