@@ -499,6 +499,7 @@ export function WorkoutExerciseForm({
                   key={setIndex}
                   set={set}
                   isBodyweight={exercise.isBodyweight}
+                  exerciseIndex={index}
                   canRemove={exercise.sets.length > 1}
                   onChange={(patch) => updateSet(setIndex, patch)}
                   onRemove={() => removeSet(setIndex)}

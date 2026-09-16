@@ -1,18 +1,26 @@
 import type { HalkuGender } from "@/lib/halku/types";
+import { HALKU_CHARACTER_ART } from "./halkuAssets";
 
 /**
- * Halku's visual mark — an original, simple, abstract icon (rounded head +
- * strong shoulders + a small spark accent, echoing the app's own Flame mark
- * for a family resemblance), NOT a detailed/illustrated character. This is a
- * deliberately basic placeholder: producing a polished, cinematic-quality
- * illustrated superhero character (the actual product ask) needs a real
- * illustrator or an image-generation tool, neither of which is available in
- * this environment — documented as a known gap rather than faked. The two
- * `gender` variants share the same silhouette/colors and differ only in a
- * small, non-stereotyped hair shape, per "equally strong and confident, not
- * a recolor."
+ * Halku's visual mark. Renders the approved character illustration from
+ * `halkuAssets.ts` the moment one is dropped in there — today both paths are
+ * `null`, so every call falls through to the abstract placeholder below
+ * (rounded head + strong shoulders + a small spark accent, echoing the app's
+ * own Flame mark for a family resemblance). That placeholder is NOT the
+ * final character art — it's deliberately basic, since producing a
+ * polished, illustrated superhero character needs a real illustrator or an
+ * image-generation tool, neither available in this environment. Documented
+ * as a known gap rather than faked; see `halkuAssets.ts` for exactly what's
+ * needed and where it plugs in. The two `gender` variants share the same
+ * silhouette/colors and differ only in a small, non-stereotyped hair shape,
+ * per "equally strong and confident, not a recolor."
  */
 export function HalkuAvatar({ gender, className }: { gender: HalkuGender; className?: string }) {
+  const artSrc = HALKU_CHARACTER_ART[gender];
+  if (artSrc) {
+    return <img src={artSrc} alt="Halku, personal AI trainer" className={className} />;
+  }
+
   return (
     <svg
       viewBox="0 0 48 48"
