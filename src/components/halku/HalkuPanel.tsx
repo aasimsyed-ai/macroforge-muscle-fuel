@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { endOfDay, startOfDay } from "date-fns";
 import { Send, Sparkles } from "lucide-react";
 
@@ -54,10 +54,23 @@ function uid(): string {
  */
 export function HalkuPanel() {
   const [open, setOpen] = useState(false);
-  const [gender, setGender] = useState<HalkuGender>(() => getHalkuGender());
+  // Starts at the deterministic SSR-safe default and is corrected from
+  // localStorage in an effect below, rather than read during the initial
+  // render itself — localStorage doesn't exist on the server, so a lazy
+  // initializer here would read "masculine" during SSR and, depending on
+  // exactly how hydration reconciles it, could get stuck showing that
+  // default even when the client's real stored preference is "feminine"
+  // (reproduced: the launcher kept rendering the male asset for a device
+  // with "feminine" already saved). An effect runs client-only, after
+  // mount, so it always applies the real preference.
+  const [gender, setGender] = useState<HalkuGender>("masculine");
   const [messages, setMessages] = useState<HalkuMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    setGender(getHalkuGender());
+  }, []);
 
   const isGuest = guestActive();
   const goals = useGoals();
@@ -126,22 +139,27 @@ export function HalkuPanel() {
       {/* The launcher is a compact standing character, not a round profile
           photo — the outer wrapper carries the fixed position/z-index/tap
           target and a soft "ground shadow" ellipse; the inner button is
-          sized to the source art's own 2:3 ratio so no cropping happens. */}
-      <div className="fixed bottom-20 right-4 z-40 sm:bottom-6">
+          sized to the source art's own 2:3 ratio (width:height) at every
+          breakpoint so the whole figure shows with no cropping. Sized to be
+          clearly noticeable — ~120px tall on mobile, ~168px on larger
+          screens — while staying a fixed corner element that can't cause
+          horizontal scrolling or sit over other controls. */}
+      <div className="fixed bottom-24 right-3 z-40 sm:bottom-8 sm:right-5">
         <div
-          className="pointer-events-none absolute inset-x-1 bottom-0 h-2 rounded-full bg-black/40 blur-sm"
+          className="pointer-events-none absolute inset-x-2 bottom-0 h-2.5 rounded-full bg-black/40 blur-sm sm:inset-x-3"
           aria-hidden="true"
         />
         <button
           type="button"
           onClick={() => setOpen(true)}
-          aria-label="Open Halku, your personal AI trainer"
-          className="group relative block h-24 w-16 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          aria-label="Open Halku — your Personal AI Trainer and in-app helper"
+          title="Halku · Personal AI Trainer"
+          className="group relative block h-[120px] w-20 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:h-[168px] sm:w-28"
         >
           <HalkuAvatar
             gender={gender}
             interactive
-            className="h-24 w-16 shadow-xl shadow-primary/10 ring-1 ring-primary/30 group-hover:shadow-primary/30 group-hover:ring-primary/60"
+            className="h-[120px] w-20 shadow-xl shadow-primary/10 ring-1 ring-primary/30 group-hover:shadow-primary/30 group-hover:ring-primary/60 sm:h-[168px] sm:w-28"
           />
         </button>
       </div>

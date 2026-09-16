@@ -29,6 +29,17 @@ export type HalkuGuidanceState =
  * render the same art perfectly still, since a person-sized breathing
  * animation next to body text would be distracting rather than premium.
  * Both respect `prefers-reduced-motion`.
+ *
+ * The hover/press reaction is a brief rotation-and-settle "lean in and nod"
+ * (`halku-greet`, `transform-origin: bottom` so the character pivots from
+ * its own feet) rather than a scale change — scaling a photographed figure
+ * up or down reads as "the image got bigger," not as a gesture, and a
+ * non-uniform scale would visibly distort anatomy. Rotation preserves the
+ * character's proportions exactly while still reading as a deliberate,
+ * subtle acknowledgement. There's no second art asset for an actual arm
+ * wave/thumbs-up pose — see docs/halku-guidance-architecture.md for that as
+ * a documented future asset need, not faked here with a distorting
+ * transform.
  */
 export function HalkuAvatar({
   gender,
@@ -46,9 +57,9 @@ export function HalkuAvatar({
         role="img"
         aria-label="Halku, personal AI trainer"
         className={cn(
-          "relative inline-block shrink-0 overflow-hidden rounded-2xl bg-black/80 bg-cover bg-top",
+          "relative inline-block shrink-0 origin-bottom overflow-hidden rounded-2xl bg-black/80 bg-cover bg-top",
           interactive &&
-            "motion-safe:animate-[halku-breathe_4.5s_ease-in-out_infinite] transition-transform duration-200 group-hover:scale-[1.04] group-hover:-translate-y-0.5 group-active:scale-95",
+            "motion-safe:animate-[halku-breathe_4.5s_ease-in-out_infinite] motion-safe:group-hover:animate-[halku-greet_0.6s_ease-out_forwards] motion-safe:group-active:animate-[halku-greet_0.45s_ease-out_forwards]",
           className,
         )}
         style={{ backgroundImage: `url(${artSrc})` }}

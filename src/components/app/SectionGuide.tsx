@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { HalkuHeadshot } from "@/components/halku/HalkuAvatar";
 import { getHalkuGender } from "@/lib/halku/preferences";
+import type { HalkuGender } from "@/lib/halku/types";
 import {
   hasSeenSectionGuide,
   markSectionGuideSeen,
@@ -32,7 +33,9 @@ import {
  */
 export function SectionGuide({ section }: { section: GuideSectionId }) {
   const [open, setOpen] = useState(false);
-  const [gender] = useState(() => getHalkuGender());
+  // See HalkuPanel.tsx for why this starts at the SSR-safe default and is
+  // corrected from localStorage in an effect, not a lazy initializer.
+  const [gender, setGender] = useState<HalkuGender>("masculine");
   const content = SECTION_GUIDES[section];
 
   useEffect(() => {
@@ -40,6 +43,10 @@ export function SectionGuide({ section }: { section: GuideSectionId }) {
     // Only check once per mount of this section — re-checking on every
     // render would reopen it if something else closed it programmatically.
   }, [section]);
+
+  useEffect(() => {
+    setGender(getHalkuGender());
+  }, []);
 
   function dismiss() {
     markSectionGuideSeen(section);
