@@ -9,28 +9,32 @@ import { HALKU_CHARACTER_ART } from "./halkuAssets";
  * asset path exists. Falls through to the abstract SVG below only if a path
  * is `null` (e.g. a future gender variant without art yet).
  *
- * The source photos are full-body 2:3 portraits, so a plain <img> squashed
- * into a small square/circle would barely show a face. Instead this crops
- * with `object-fit: cover` + `object-position: top` inside a clipped,
- * `className`-sized frame — anchoring to the top of the source image always
- * surfaces the head and shoulders first, staying recognizable down to the
- * smallest (floating-launcher) size, and revealing a bit more of the
- * branded outfit at larger sizes (e.g. the chat panel header) without ever
- * needing a different crop per call site.
+ * The source photos are full-body 2:3 portraits. A plain `object-fit: cover`
+ * crop of a full-body shot into a small circle would show mostly torso, not
+ * a face — barely recognizable at launcher size. Instead this renders the
+ * art as a `background-image` zoomed in on the head: `background-size` is
+ * set well past 100% (280%) so only roughly the top fifth of the source
+ * image — head, hair and collar — fills the frame, with `background-
+ * position: 50% 0%` keeping it centered and anchored to the top. Same crop
+ * everywhere HalkuAvatar is used (launcher, chat header, quick guide) for a
+ * consistent, recognizable "headshot" at every size — no per-call-site
+ * tuning, and the source files themselves are never resized or edited.
  */
 export function HalkuAvatar({ gender, className }: { gender: HalkuGender; className?: string }) {
   const artSrc = HALKU_CHARACTER_ART[gender];
   if (artSrc) {
     return (
       <span
-        className={cn("relative inline-block overflow-hidden rounded-full bg-black/80", className)}
-      >
-        <img
-          src={artSrc}
-          alt="Halku, personal AI trainer"
-          className="size-full object-cover object-top"
-        />
-      </span>
+        role="img"
+        aria-label="Halku, personal AI trainer"
+        className={cn("inline-block shrink-0 overflow-hidden rounded-full bg-black/80", className)}
+        style={{
+          backgroundImage: `url(${artSrc})`,
+          backgroundSize: "280% auto",
+          backgroundPosition: "50% 0%",
+          backgroundRepeat: "no-repeat",
+        }}
+      />
     );
   }
 

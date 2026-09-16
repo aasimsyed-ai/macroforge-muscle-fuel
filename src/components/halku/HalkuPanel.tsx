@@ -16,12 +16,19 @@ import { useExerciseProgressBoard } from "@/lib/workouts/hooks";
 
 import { HalkuAvatar } from "./HalkuAvatar";
 
-const QUICK_QUESTIONS = [
-  "What does progressive overload mean?",
-  "What are sets and reps?",
-  "How do I log homemade food?",
-  "Why is my protein target this amount?",
-  "Why didn't you recommend increasing my bicep weight?",
+// Compact chip label vs. the full question actually sent — keeps the quick-
+// question row scannable and not wrapped in a wall of text on small screens
+// while still asking the exact phrasing lib/halku/respond.ts's keyword
+// classifier expects.
+const QUICK_QUESTIONS: ReadonlyArray<{ label: string; question: string }> = [
+  { label: "What's progressive overload?", question: "What does progressive overload mean?" },
+  { label: "Sets vs. reps", question: "What are sets and reps?" },
+  { label: "Log a homemade meal", question: "How do I log homemade food?" },
+  { label: "Why this protein target?", question: "Why is my protein target this amount?" },
+  {
+    label: "Why not more weight on biceps?",
+    question: "Why didn't you recommend increasing my bicep weight?",
+  },
 ];
 
 function uid(): string {
@@ -90,6 +97,20 @@ export function HalkuPanel() {
         ...current,
         { id: uid(), role: "halku", text: answer.text, grounded: answer.grounded },
       ]);
+    } catch {
+      // answerHalkuQuestion already falls back locally on any remote failure —
+      // this only catches a genuinely unexpected error, so the user sees a
+      // clear, honest notice instead of the question silently going nowhere.
+      setMessages((current) => [
+        ...current,
+        {
+          id: uid(),
+          role: "halku",
+          text: "Something went wrong answering that — please try again.",
+          grounded: false,
+          isError: true,
+        },
+      ]);
     } finally {
       setSending(false);
     }
@@ -101,9 +122,9 @@ export function HalkuPanel() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Open Halku, your personal AI trainer"
-        className="fixed bottom-20 right-4 z-40 flex size-14 items-center justify-center rounded-full border border-primary/30 bg-card shadow-lg transition-transform hover:scale-105 sm:bottom-6"
+        className="fixed bottom-20 right-4 z-40 flex size-14 items-center justify-center rounded-full border-2 border-primary/40 bg-card shadow-xl shadow-primary/10 transition-transform hover:scale-105 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:bottom-6"
       >
-        <HalkuAvatar gender={gender} className="size-10" />
+        <HalkuAvatar gender={gender} className="size-11" />
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -112,9 +133,9 @@ export function HalkuPanel() {
             <div className="flex items-center gap-2">
               <HalkuAvatar gender={gender} className="size-12 shrink-0" />
               <div className="min-w-0 flex-1 text-left">
-                <DialogTitle>Halku · Personal AI Trainer</DialogTitle>
-                <p className="text-xs text-muted-foreground">
-                  Ask about anything in the app, or your own progress.
+                <DialogTitle className="text-base leading-tight">Halku</DialogTitle>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-primary">
+                  Personal AI Trainer
                 </p>
               </div>
               <Button
@@ -140,8 +161,12 @@ export function HalkuPanel() {
               messages.map((message) => (
                 <div
                   key={message.id}
-                  className={`rounded-lg p-2 text-xs ${
-                    message.role === "user" ? "ml-6 bg-primary/15 text-right" : "mr-6 bg-card"
+                  className={`rounded-lg p-2.5 text-sm leading-snug ${
+                    message.role === "user"
+                      ? "ml-6 bg-primary/15 text-right"
+                      : message.isError
+                        ? "mr-6 border border-destructive/30 bg-destructive/10"
+                        : "mr-6 bg-card"
                   }`}
                 >
                   {message.role === "halku" && message.grounded ? (
@@ -154,20 +179,25 @@ export function HalkuPanel() {
               ))
             )}
             {sending ? (
-              <p className="p-2 text-xs text-muted-foreground">Halku is thinking…</p>
+              <div className="mr-6 flex items-center gap-1 rounded-lg bg-card p-2.5">
+                <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.3s]" />
+                <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.15s]" />
+                <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground" />
+                <span className="sr-only">Halku is thinking…</span>
+              </div>
             ) : null}
           </div>
 
           {messages.length === 0 ? (
             <div className="flex flex-wrap gap-1.5">
-              {QUICK_QUESTIONS.map((question) => (
+              {QUICK_QUESTIONS.map(({ label, question }) => (
                 <button
                   key={question}
                   type="button"
                   onClick={() => void ask(question)}
-                  className="rounded-full border border-border bg-card px-2.5 py-1 text-left text-[11px] transition-colors hover:border-primary"
+                  className="rounded-full border border-border bg-card px-2.5 py-1.5 text-left text-[11px] transition-colors hover:border-primary hover:bg-primary/5 active:scale-95"
                 >
-                  {question}
+                  {label}
                 </button>
               ))}
             </div>

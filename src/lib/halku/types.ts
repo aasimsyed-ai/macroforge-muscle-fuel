@@ -7,6 +7,10 @@ export interface HalkuMessage {
   /** True when this answer used the user's real logged data (labelled "Your
    * data shows…" in the UI); false for general fitness/nutrition guidance. */
   grounded: boolean;
+  /** UI-only: true when this message is a friendly failure notice (the
+   * question couldn't be answered at all) rather than a real Halku reply —
+   * styled distinctly so it never looks like a fabricated answer. */
+  isError?: boolean;
 }
 
 export interface HalkuAnswer {

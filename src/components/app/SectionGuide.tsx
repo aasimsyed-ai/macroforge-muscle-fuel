@@ -63,12 +63,15 @@ export function SectionGuide({ section }: { section: GuideSectionId }) {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <div className="flex items-center gap-2">
-              <HalkuAvatar gender={gender} className="size-9 shrink-0" />
+              <HalkuAvatar gender={gender} className="size-10 shrink-0" />
               <div className="min-w-0 flex-1 text-left">
-                <DialogTitle>{content.title}</DialogTitle>
-                <DialogDescription>{content.intro}</DialogDescription>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-primary">
+                  Halku's quick guide
+                </p>
+                <DialogTitle className="text-base leading-tight">{content.title}</DialogTitle>
               </div>
             </div>
+            <DialogDescription>{content.intro}</DialogDescription>
           </DialogHeader>
 
           <ul className="max-h-64 space-y-2 overflow-y-auto text-sm">
