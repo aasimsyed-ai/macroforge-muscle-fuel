@@ -15,6 +15,7 @@ import { WhatsAppSettings } from "./WhatsAppSettings";
 import { WorkoutAccountRequired } from "./WorkoutAccountRequired";
 import { WorkoutHistory } from "./WorkoutHistory";
 import { WorkoutLogger } from "./WorkoutLogger";
+import { WorkoutProgressBoard } from "./WorkoutProgressBoard";
 import { WorkoutSummaryCards } from "./WorkoutSummaryCards";
 
 export function WorkoutDashboard({
@@ -65,13 +66,21 @@ export function WorkoutDashboard({
               bodyWeightKg={bodyWeightKg}
               onSaved={() => {
                 setLogging(false);
-                if (prefsData) runWorkoutNotifications(prefsData, { force: true }).catch(() => undefined);
+                if (prefsData)
+                  runWorkoutNotifications(prefsData, { force: true }).catch(() => undefined);
               }}
               onCancel={() => setLogging(false)}
             />
           </div>
         ) : null}
       </div>
+
+      {/* The headline feature: is the user actually progressively overloading,
+          exercise by exercise. Runs on its own This week/Last week/This month
+          selector, independent of the range picker above the dashboard, so it
+          always renders (with its own loading/error/empty states) regardless
+          of whether the selected outer range has any workouts in it. */}
+      <WorkoutProgressBoard />
 
       {stats.isLoading ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

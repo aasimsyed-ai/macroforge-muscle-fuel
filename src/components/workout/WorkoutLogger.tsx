@@ -21,6 +21,7 @@ import { INTENSITIES } from "@/lib/workouts/constants";
 import {
   useCreateWorkout,
   useExerciseCatalog,
+  useRecentExerciseNames,
   useRecentWorkoutSessions,
   useReplaceWorkout,
   useTrainingPreferences,
@@ -70,12 +71,15 @@ export function WorkoutLogger({
 }) {
   const isEditing = !!initialData;
   const catalog = useExerciseCatalog();
+  const recentExerciseNames = useRecentExerciseNames();
   const preferences = useTrainingPreferences();
   const recentSessions = useRecentWorkoutSessions();
   const create = useCreateWorkout();
   const replace = useReplaceWorkout();
 
-  const [draft, setDraft] = useState<WorkoutSessionDraft>(() => initialData?.draft ?? initialDraft());
+  const [draft, setDraft] = useState<WorkoutSessionDraft>(
+    () => initialData?.draft ?? initialDraft(),
+  );
   const [errors, setErrors] = useState<string[]>([]);
   const [showWearable, setShowWearable] = useState(
     () =>
@@ -85,10 +89,18 @@ export function WorkoutLogger({
         initialData?.draft.maxHeartRate != null),
   );
   const [copyingSessionId, setCopyingSessionId] = useState<string | null>(null);
-  // Bumped whenever `draft.exercises` is replaced wholesale (copy-from-previous,
-  // post-save reset) so exercise/set rows remount and drop stale local UI state
-  // (e.g. a weight input's "custom vs preset" toggle) instead of reusing it by index.
-  const [draftVersion, setDraftVersion] = useState(0);
+  // Stable per-exercise React keys, independent of array position. Without
+  // this, removing exercise N shifts every later exercise's index-based key,
+  // remounting them and silently resetting their collapse/expanded-set UI
+  // state (not their data — that lives in `draft`, untouched) even though
+  // nothing about those exercises actually changed. Replacing `draft.exercises`
+  // wholesale (copy-from-previous, post-save reset) regenerates every key too,
+  // so those rows still remount and drop stale local UI state on purpose (e.g.
+  // a weight input's "custom vs preset" toggle).
+  const nextExerciseKey = useRef(1);
+  const [exerciseKeys, setExerciseKeys] = useState<number[]>(() =>
+    draft.exercises.map(() => nextExerciseKey.current++),
+  );
   // Editing a saved session already has its own training phase — don't let the
   // "apply my default phase" effect below silently overwrite it.
   const phaseTouched = useRef(isEditing);
@@ -131,6 +143,7 @@ export function WorkoutLogger({
 
   function addExercise() {
     setDraft((current) => ({ ...current, exercises: [...current.exercises, newExerciseDraft()] }));
+    setExerciseKeys((current) => [...current, nextExerciseKey.current++]);
   }
 
   async function copyFromSession(sessionId: string) {
@@ -144,7 +157,7 @@ export function WorkoutLogger({
       }
       const exercises = workoutApi.sessionDetailToExerciseDrafts(detail);
       setDraft((current) => ({ ...current, exercises }));
-      setDraftVersion((v) => v + 1);
+      setExerciseKeys(exercises.map(() => nextExerciseKey.current++));
       toast.success("Loaded — update the weights and save.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not load that workout.");
@@ -161,6 +174,9 @@ export function WorkoutLogger({
           ? current.exercises.filter((_, i) => i !== index)
           : current.exercises,
     }));
+    setExerciseKeys((current) =>
+      current.length > 1 ? current.filter((_, i) => i !== index) : current,
+    );
   }
 
   async function submit(event: React.FormEvent) {
@@ -177,18 +193,26 @@ export function WorkoutLogger({
     submittingRef.current = true;
     try {
       if (isEditing && initialData) {
-        const result = await replace.mutateAsync({ oldId: initialData.sessionId, draft, bodyWeightKg });
+        const result = await replace.mutateAsync({
+          oldId: initialData.sessionId,
+          draft,
+          bodyWeightKg,
+        });
         if (result.oldSessionRemoved) {
           toast.success("Workout updated");
         } else {
-          toast.warning("Workout updated, but the old entry couldn't be removed. Please check Workout History.");
+          toast.warning(
+            "Workout updated, but the old entry couldn't be removed. Please check Workout History.",
+          );
         }
       } else {
         await create.mutateAsync({ draft, bodyWeightKg });
         const moved = Math.round(totalVolume);
-        toast.success(moved > 0 ? `Workout logged ✓ · ${moved.toLocaleString()} kg moved` : "Workout logged ✓");
+        toast.success(
+          moved > 0 ? `Workout logged ✓ · ${moved.toLocaleString()} kg moved` : "Workout logged ✓",
+        );
         setDraft(initialDraft());
-        setDraftVersion((v) => v + 1);
+        setExerciseKeys([nextExerciseKey.current++]);
         phaseTouched.current = false;
       }
       playSaveTone();
@@ -322,10 +346,11 @@ export function WorkoutLogger({
         </div>
         {draft.exercises.map((exercise, index) => (
           <WorkoutExerciseForm
-            key={`${draftVersion}-${index}`}
+            key={exerciseKeys[index] ?? index}
             index={index}
             exercise={exercise}
             catalog={catalog.data ?? []}
+            recentExerciseNames={recentExerciseNames.data ?? []}
             canRemove={draft.exercises.length > 1}
             onChange={(patch) => patchExercise(index, patch)}
             onRemove={() => removeExercise(index)}
@@ -366,7 +391,10 @@ export function WorkoutLogger({
                   max={240}
                   value={draft.averageHeartRate === null ? "" : String(draft.averageHeartRate)}
                   onChange={(event) =>
-                    setDraft((c) => ({ ...c, averageHeartRate: toNumberOrNull(event.target.value) }))
+                    setDraft((c) => ({
+                      ...c,
+                      averageHeartRate: toNumberOrNull(event.target.value),
+                    }))
                   }
                 />
               </div>

@@ -4,6 +4,7 @@ import { BarChart3, CirclePlus, Dumbbell, Flame, LogOut, Settings } from "lucide
 import type { ReactNode } from "react";
 
 import { NotificationBell } from "@/components/workout/NotificationBell";
+import { HalkuPanel } from "@/components/halku/HalkuPanel";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { TRIAL_DAYS, guestActive, guestDayNumber } from "@/lib/guest";
@@ -15,7 +16,15 @@ const NAV = [
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
-export function AppShell({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
+export function AppShell({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+}) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isGuest = guestActive();
@@ -34,14 +43,21 @@ export function AppShell({ title, subtitle, children }: { title: string; subtitl
           <span className="text-muted-foreground">
             Trial · day {guestDayNumber()} of {TRIAL_DAYS} — your data is only on this device.
           </span>{" "}
-          <Link to="/auth" search={{ mode: "signup" }} className="font-semibold text-primary underline">
+          <Link
+            to="/auth"
+            search={{ mode: "signup" }}
+            className="font-semibold text-primary underline"
+          >
             Create a free account to save it
           </Link>
         </div>
       ) : null}
       <header className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3 px-4 pt-6">
         <div>
-          <Link to="/dashboard" className="flex items-center gap-2 text-sm font-semibold text-primary">
+          <Link
+            to="/dashboard"
+            className="flex items-center gap-2 text-sm font-semibold text-primary"
+          >
             <Flame className="size-4" aria-hidden="true" /> MacroForge
           </Link>
           <h1 className="mt-1 text-2xl font-bold sm:text-3xl">{title}</h1>
@@ -62,7 +78,9 @@ export function AppShell({ title, subtitle, children }: { title: string; subtitl
           </nav>
           {isGuest ? (
             <Button asChild size="sm">
-              <Link to="/auth" search={{ mode: "signup" }}>Sign up</Link>
+              <Link to="/auth" search={{ mode: "signup" }}>
+                Sign up
+              </Link>
             </Button>
           ) : (
             <>
@@ -93,6 +111,8 @@ export function AppShell({ title, subtitle, children }: { title: string; subtitl
           ))}
         </ul>
       </nav>
+
+      <HalkuPanel />
     </div>
   );
 }

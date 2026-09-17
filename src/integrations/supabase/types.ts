@@ -65,6 +65,39 @@ export type Database = {
         }
         Relationships: []
       }
+      exercise_catalog: {
+        Row: {
+          created_at: string
+          equipment: string | null
+          id: string
+          is_active: boolean
+          is_bodyweight: boolean
+          muscle_group: string
+          name: string
+          variant: string | null
+        }
+        Insert: {
+          created_at?: string
+          equipment?: string | null
+          id?: string
+          is_active?: boolean
+          is_bodyweight?: boolean
+          muscle_group: string
+          name: string
+          variant?: string | null
+        }
+        Update: {
+          created_at?: string
+          equipment?: string | null
+          id?: string
+          is_active?: boolean
+          is_bodyweight?: boolean
+          muscle_group?: string
+          name?: string
+          variant?: string | null
+        }
+        Relationships: []
+      }
       goals: {
         Row: {
           calorie_target: number
@@ -116,6 +149,54 @@ export type Database = {
           user_id?: string
           water_target_ml?: number
           workout_days_per_week?: number
+        }
+        Relationships: []
+      }
+      meal_templates: {
+        Row: {
+          calories: number
+          carbs_g: number
+          category: string
+          created_at: string
+          estimate_source: string | null
+          fat_g: number
+          id: string
+          is_estimate: boolean
+          name: string
+          protein_g: number
+          serving_amount: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          calories?: number
+          carbs_g?: number
+          category?: string
+          created_at?: string
+          estimate_source?: string | null
+          fat_g?: number
+          id?: string
+          is_estimate?: boolean
+          name: string
+          protein_g?: number
+          serving_amount?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          calories?: number
+          carbs_g?: number
+          category?: string
+          created_at?: string
+          estimate_source?: string | null
+          fat_g?: number
+          id?: string
+          is_estimate?: boolean
+          name?: string
+          protein_g?: number
+          serving_amount?: string | null
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -179,53 +260,61 @@ export type Database = {
         }
         Relationships: []
       }
-      meal_templates: {
+      notifications: {
         Row: {
-          calories: number
-          carbs_g: number
-          category: string
+          category: Database["public"]["Enums"]["notification_category"]
           created_at: string
-          estimate_source: string | null
-          fat_g: number
+          dedupe_key: string | null
+          expires_at: string | null
           id: string
-          is_estimate: boolean
-          name: string
-          protein_g: number
-          serving_amount: string | null
-          updated_at: string
+          is_dismissed: boolean
+          is_read: boolean
+          message: string
+          priority: string
+          related_exercise_name: string | null
+          related_workout_id: string | null
+          title: string
           user_id: string
         }
         Insert: {
-          calories?: number
-          carbs_g?: number
-          category?: string
+          category: Database["public"]["Enums"]["notification_category"]
           created_at?: string
-          estimate_source?: string | null
-          fat_g?: number
+          dedupe_key?: string | null
+          expires_at?: string | null
           id?: string
-          is_estimate?: boolean
-          name: string
-          protein_g?: number
-          serving_amount?: string | null
-          updated_at?: string
+          is_dismissed?: boolean
+          is_read?: boolean
+          message: string
+          priority?: string
+          related_exercise_name?: string | null
+          related_workout_id?: string | null
+          title: string
           user_id: string
         }
         Update: {
-          calories?: number
-          carbs_g?: number
-          category?: string
+          category?: Database["public"]["Enums"]["notification_category"]
           created_at?: string
-          estimate_source?: string | null
-          fat_g?: number
+          dedupe_key?: string | null
+          expires_at?: string | null
           id?: string
-          is_estimate?: boolean
-          name?: string
-          protein_g?: number
-          serving_amount?: string | null
-          updated_at?: string
+          is_dismissed?: boolean
+          is_read?: boolean
+          message?: string
+          priority?: string
+          related_exercise_name?: string | null
+          related_workout_id?: string | null
+          title?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "notifications_related_workout_id_fkey"
+            columns: ["related_workout_id"]
+            isOneToOne: false
+            referencedRelation: "workout_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -308,94 +397,15 @@ export type Database = {
         }
         Relationships: []
       }
-      exercise_catalog: {
-        Row: {
-          created_at: string
-          equipment: string | null
-          id: string
-          is_active: boolean
-          is_bodyweight: boolean
-          muscle_group: string
-          name: string
-          variant: string | null
-        }
-        Insert: {
-          created_at?: string
-          equipment?: string | null
-          id?: string
-          is_active?: boolean
-          is_bodyweight?: boolean
-          muscle_group: string
-          name: string
-          variant?: string | null
-        }
-        Update: {
-          created_at?: string
-          equipment?: string | null
-          id?: string
-          is_active?: boolean
-          is_bodyweight?: boolean
-          muscle_group?: string
-          name?: string
-          variant?: string | null
-        }
-        Relationships: []
-      }
-      notifications: {
-        Row: {
-          category: Database["public"]["Enums"]["notification_category"]
-          created_at: string
-          dedupe_key: string | null
-          expires_at: string | null
-          id: string
-          is_dismissed: boolean
-          is_read: boolean
-          message: string
-          priority: string
-          related_exercise_name: string | null
-          related_workout_id: string | null
-          title: string
-          user_id: string
-        }
-        Insert: {
-          category: Database["public"]["Enums"]["notification_category"]
-          created_at?: string
-          dedupe_key?: string | null
-          expires_at?: string | null
-          id?: string
-          is_dismissed?: boolean
-          is_read?: boolean
-          message: string
-          priority?: string
-          related_exercise_name?: string | null
-          related_workout_id?: string | null
-          title: string
-          user_id: string
-        }
-        Update: {
-          category?: Database["public"]["Enums"]["notification_category"]
-          created_at?: string
-          dedupe_key?: string | null
-          expires_at?: string | null
-          id?: string
-          is_dismissed?: boolean
-          is_read?: boolean
-          message?: string
-          priority?: string
-          related_exercise_name?: string | null
-          related_workout_id?: string | null
-          title?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       user_training_preferences: {
         Row: {
           created_at: string
           enable_health_notifications: boolean
           enable_motivation_notifications: boolean
           enable_progression_notifications: boolean
-          experience_level: Database["public"]["Enums"]["experience_level"] | null
+          experience_level:
+            | Database["public"]["Enums"]["experience_level"]
+            | null
           minimum_sessions_for_suggestion: number
           minimum_weeks_for_suggestion: number
           progression_mode: string
@@ -413,7 +423,9 @@ export type Database = {
           enable_health_notifications?: boolean
           enable_motivation_notifications?: boolean
           enable_progression_notifications?: boolean
-          experience_level?: Database["public"]["Enums"]["experience_level"] | null
+          experience_level?:
+            | Database["public"]["Enums"]["experience_level"]
+            | null
           minimum_sessions_for_suggestion?: number
           minimum_weeks_for_suggestion?: number
           progression_mode?: string
@@ -431,7 +443,9 @@ export type Database = {
           enable_health_notifications?: boolean
           enable_motivation_notifications?: boolean
           enable_progression_notifications?: boolean
-          experience_level?: Database["public"]["Enums"]["experience_level"] | null
+          experience_level?:
+            | Database["public"]["Enums"]["experience_level"]
+            | null
           minimum_sessions_for_suggestion?: number
           minimum_weeks_for_suggestion?: number
           progression_mode?: string
@@ -492,7 +506,15 @@ export type Database = {
           template_name?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_message_logs_notification_id_fkey"
+            columns: ["notification_id"]
+            isOneToOne: false
+            referencedRelation: "notifications"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       whatsapp_preferences: {
         Row: {
@@ -585,12 +607,29 @@ export type Database = {
           session_id?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "workout_exercises_exercise_catalog_id_fkey"
+            columns: ["exercise_catalog_id"]
+            isOneToOne: false
+            referencedRelation: "exercise_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workout_exercises_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "workout_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       workout_sessions: {
         Row: {
           average_heart_rate: number | null
-          calories_source: Database["public"]["Enums"]["workout_data_source"] | null
+          calories_source:
+            | Database["public"]["Enums"]["workout_data_source"]
+            | null
           created_at: string
           duration_minutes: number | null
           ended_at: string | null
@@ -612,7 +651,9 @@ export type Database = {
         }
         Insert: {
           average_heart_rate?: number | null
-          calories_source?: Database["public"]["Enums"]["workout_data_source"] | null
+          calories_source?:
+            | Database["public"]["Enums"]["workout_data_source"]
+            | null
           created_at?: string
           duration_minutes?: number | null
           ended_at?: string | null
@@ -634,7 +675,9 @@ export type Database = {
         }
         Update: {
           average_heart_rate?: number | null
-          calories_source?: Database["public"]["Enums"]["workout_data_source"] | null
+          calories_source?:
+            | Database["public"]["Enums"]["workout_data_source"]
+            | null
           created_at?: string
           duration_minutes?: number | null
           ended_at?: string | null
@@ -702,7 +745,15 @@ export type Database = {
           weight_mode?: string
           workout_exercise_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "workout_sets_workout_exercise_id_fkey"
+            columns: ["workout_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "workout_exercises"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -711,20 +762,49 @@ export type Database = {
     Functions: {
       create_workout_session: {
         Args: {
-          p_workout_date: string
-          p_duration_minutes: number | null
-          p_intensity: Database["public"]["Enums"]["workout_intensity"] | null
-          p_training_phase: Database["public"]["Enums"]["training_phase"] | null
-          p_estimated_calories_burned: number | null
-          p_wearable_calories_burned: number | null
-          p_calories_source: Database["public"]["Enums"]["workout_data_source"] | null
-          p_average_heart_rate: number | null
-          p_max_heart_rate: number | null
-          p_total_volume: number
-          p_notes: string | null
+          p_average_heart_rate: number
+          p_calories_source: Database["public"]["Enums"]["workout_data_source"]
+          p_duration_minutes: number
+          p_estimated_calories_burned: number
           p_exercises: Json
+          p_intensity: Database["public"]["Enums"]["workout_intensity"]
+          p_max_heart_rate: number
+          p_notes: string
+          p_total_volume: number
+          p_training_phase: Database["public"]["Enums"]["training_phase"]
+          p_wearable_calories_burned: number
+          p_workout_date: string
         }
-        Returns: Database["public"]["Tables"]["workout_sessions"]["Row"]
+        Returns: {
+          average_heart_rate: number | null
+          calories_source:
+            | Database["public"]["Enums"]["workout_data_source"]
+            | null
+          created_at: string
+          duration_minutes: number | null
+          ended_at: string | null
+          estimated_calories_burned: number | null
+          external_source: string | null
+          external_workout_id: string | null
+          id: string
+          intensity: Database["public"]["Enums"]["workout_intensity"] | null
+          max_heart_rate: number | null
+          notes: string | null
+          source: Database["public"]["Enums"]["workout_data_source"]
+          started_at: string | null
+          total_volume: number
+          training_phase: Database["public"]["Enums"]["training_phase"] | null
+          updated_at: string
+          user_id: string
+          wearable_calories_burned: number | null
+          workout_date: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "workout_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
     }
     Enums: {

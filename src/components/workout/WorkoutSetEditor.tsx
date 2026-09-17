@@ -12,8 +12,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { INDIAN_GYM_WEIGHTS_KG, WEIGHT_MODES } from "@/lib/workouts/constants";
-import type { WeightMode, WorkoutSetDraft } from "@/lib/workouts/types";
+import { INDIAN_GYM_WEIGHTS_KG } from "@/lib/workouts/constants";
+import type { WorkoutSetDraft } from "@/lib/workouts/types";
 
 const LADDER = INDIAN_GYM_WEIGHTS_KG as readonly number[];
 
@@ -30,29 +30,33 @@ function toNumberOrNull(raw: string): number | null {
 
 export function WorkoutSetEditor({
   set,
+  isBodyweight,
+  exerciseIndex,
   onChange,
   onRemove,
   canRemove,
 }: {
   set: WorkoutSetDraft;
+  /** From the exercise (catalog match or manual pick) — decides whether this
+   * set tracks bodyweight + optional added load, or a plain external weight.
+   * No longer a per-set user choice (the "Load" mode picker was removed from
+   * the entry UI); the underlying `weightMode` is still stored for volume
+   * calculations, just set automatically to match. */
+  isBodyweight: boolean;
+  /** The parent exercise's position in the workout — set numbers restart at 1
+   * for every exercise, so this must prefix every input `id` below or two
+   * exercises' "Set 1" would render duplicate DOM ids, breaking `<Label
+   * htmlFor>` association (a label click could focus the wrong exercise's
+   * field) and HTML validity. */
+  exerciseIndex: number;
   onChange: (patch: Partial<WorkoutSetDraft>) => void;
   onRemove: () => void;
   canRemove: boolean;
 }) {
   const [customWeight, setCustomWeight] = useState(
-    () => set.weightMode !== "bodyweight" && set.weightKg !== null && !isPresetWeight(set.weightKg),
+    () => !isBodyweight && set.weightKg !== null && !isPresetWeight(set.weightKg),
   );
-
-  const isBodyweight = set.weightMode === "bodyweight";
-
-  function changeMode(nextMode: WeightMode) {
-    if (nextMode === "bodyweight") {
-      setCustomWeight(false);
-      onChange({ weightMode: nextMode, weightKg: null });
-    } else {
-      onChange({ weightMode: nextMode });
-    }
-  }
+  const idPrefix = `${exerciseIndex}-${set.setNumber}`;
 
   return (
     <div className="rounded-lg border border-border bg-background/40 p-3">
@@ -71,13 +75,16 @@ export function WorkoutSetEditor({
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {/* Reps(1) + Weight(2) + Rest(1) + Completed(1) = 5 units — sm:grid-cols-5
+          so all four fields land on one row instead of orphaning Completed
+          onto a second row with empty cells beside it. */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         <div className="space-y-1">
-          <Label htmlFor={`reps-${set.setNumber}`} className="text-[11px]">
+          <Label htmlFor={`reps-${idPrefix}`} className="text-[11px]">
             Reps
           </Label>
           <Input
-            id={`reps-${set.setNumber}`}
+            id={`reps-${idPrefix}`}
             type="number"
             inputMode="numeric"
             min={1}
@@ -87,31 +94,13 @@ export function WorkoutSetEditor({
           />
         </div>
 
-        <div className="space-y-1">
-          <Label htmlFor={`mode-${set.setNumber}`} className="text-[11px]">
-            Load
-          </Label>
-          <Select value={set.weightMode} onValueChange={(value) => changeMode(value as WeightMode)}>
-            <SelectTrigger id={`mode-${set.setNumber}`}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {WEIGHT_MODES.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="col-span-2 space-y-1">
-          <Label htmlFor={`weight-${set.setNumber}`} className="text-[11px]">
+        <div className="col-span-1 space-y-1 sm:col-span-2">
+          <Label htmlFor={`weight-${idPrefix}`} className="text-[11px]">
             {isBodyweight ? "Added weight (kg, optional)" : "Weight (kg)"}
           </Label>
           {isBodyweight || customWeight ? (
             <Input
-              id={`weight-${set.setNumber}`}
+              id={`weight-${idPrefix}`}
               type="number"
               inputMode="decimal"
               min={0}
@@ -131,7 +120,7 @@ export function WorkoutSetEditor({
                 onChange({ weightKg: Number(value) });
               }}
             >
-              <SelectTrigger id={`weight-${set.setNumber}`}>
+              <SelectTrigger id={`weight-${idPrefix}`}>
                 <SelectValue placeholder="Select weight" />
               </SelectTrigger>
               <SelectContent>
@@ -154,45 +143,13 @@ export function WorkoutSetEditor({
             </button>
           ) : null}
         </div>
-      </div>
 
-      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
         <div className="space-y-1">
-          <Label htmlFor={`rir-${set.setNumber}`} className="text-[11px]">
-            RIR (0-10)
-          </Label>
-          <Input
-            id={`rir-${set.setNumber}`}
-            type="number"
-            inputMode="decimal"
-            min={0}
-            max={10}
-            step="0.5"
-            value={set.rir === null ? "" : String(set.rir)}
-            onChange={(event) => onChange({ rir: toNumberOrNull(event.target.value) })}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor={`rpe-${set.setNumber}`} className="text-[11px]">
-            RPE (1-10)
-          </Label>
-          <Input
-            id={`rpe-${set.setNumber}`}
-            type="number"
-            inputMode="decimal"
-            min={1}
-            max={10}
-            step="0.5"
-            value={set.rpe === null ? "" : String(set.rpe)}
-            onChange={(event) => onChange({ rpe: toNumberOrNull(event.target.value) })}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor={`rest-${set.setNumber}`} className="text-[11px]">
+          <Label htmlFor={`rest-${idPrefix}`} className="text-[11px]">
             Rest (sec)
           </Label>
           <Input
-            id={`rest-${set.setNumber}`}
+            id={`rest-${idPrefix}`}
             type="number"
             inputMode="numeric"
             min={0}
@@ -202,12 +159,13 @@ export function WorkoutSetEditor({
             onChange={(event) => onChange({ restSeconds: toNumberOrNull(event.target.value) })}
           />
         </div>
+
         <div className="flex items-end justify-between gap-2 rounded-md bg-secondary px-2 py-1.5">
-          <Label htmlFor={`done-${set.setNumber}`} className="text-[11px]">
+          <Label htmlFor={`done-${idPrefix}`} className="text-[11px]">
             Completed
           </Label>
           <Switch
-            id={`done-${set.setNumber}`}
+            id={`done-${idPrefix}`}
             checked={set.completed}
             onCheckedChange={(checked) => onChange({ completed: checked })}
           />
