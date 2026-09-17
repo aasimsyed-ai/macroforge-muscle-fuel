@@ -160,13 +160,18 @@ export function HalkuHeadshot({ gender, className }: { gender: HalkuGender; clas
     <span
       role="img"
       aria-label="Halku, personal AI trainer"
-      className={cn("inline-block shrink-0 overflow-hidden rounded-full bg-black/80", className)}
-      style={{
-        backgroundImage: `url(${artSrc})`,
-        backgroundSize: "280% auto",
-        backgroundPosition: "50% 0%",
-        backgroundRepeat: "no-repeat",
-      }}
-    />
+      className={cn(
+        "relative inline-block shrink-0 overflow-hidden rounded-full border border-primary/30 bg-secondary",
+        className,
+      )}
+    >
+      <img
+        src={artSrc}
+        alt=""
+        aria-hidden="true"
+        className="absolute left-1/2 top-0 h-auto w-[280%] max-w-none -translate-x-1/2 object-contain"
+        style={{ filter: "url(#halku-key-filter)" }}
+      />
+    </span>
   );
 }
