@@ -18,15 +18,19 @@ export function HalkuMessageContent({ text }: { text: string }) {
   type Block =
     | { kind: "paragraph"; text: string }
     | { kind: "bullets"; items: string[] }
-    | { kind: "numbered"; items: string[] };
+    | { kind: "numbered"; items: string[] }
+    | { kind: "heading"; text: string };
 
   const blocks: Block[] = [];
   for (const rawLine of lines) {
     const line = rawLine.trim();
+    const headingMatch = /^#{1,3}\s+(.*)/.exec(line);
     const bulletMatch = /^[-•]\s+(.*)/.exec(line);
     const numberedMatch = /^\d+[.)]\s+(.*)/.exec(line);
 
-    if (bulletMatch) {
+    if (headingMatch) {
+      blocks.push({ kind: "heading", text: headingMatch[1] ?? "" });
+    } else if (bulletMatch) {
       const last = blocks[blocks.length - 1];
       if (last?.kind === "bullets") last.items.push(bulletMatch[1] ?? "");
       else blocks.push({ kind: "bullets", items: [bulletMatch[1] ?? ""] });
@@ -44,6 +48,16 @@ export function HalkuMessageContent({ text }: { text: string }) {
   return (
     <div className="space-y-1.5">
       {blocks.map((block, index) => {
+        if (block.kind === "heading") {
+          return (
+            <p
+              key={index}
+              className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+            >
+              {renderInline(block.text)}
+            </p>
+          );
+        }
         if (block.kind === "bullets") {
           return (
             <ul key={index} className="list-disc space-y-0.5 pl-4">

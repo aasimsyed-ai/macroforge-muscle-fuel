@@ -106,11 +106,18 @@ export function HalkuPanel() {
   async function ask(question: string) {
     const text = question.trim();
     if (!text || sending) return;
+    // Only ever the single prior exchange, not a growing transcript — just
+    // enough for a short follow-up ("What should I do next?") to resolve
+    // against the topic just discussed, without building a memory system.
+    const lastUser = [...messages].reverse().find((m) => m.role === "user");
+    const lastHalku = [...messages].reverse().find((m) => m.role === "halku" && !m.isError);
+    const previous =
+      lastUser && lastHalku ? { question: lastUser.text, answer: lastHalku.text } : undefined;
     setMessages((current) => [...current, { id: uid(), role: "user", text, grounded: false }]);
     setInput("");
     setSending(true);
     try {
-      const answer = await answerHalkuQuestion(text, knownData());
+      const answer = await answerHalkuQuestion(text, knownData(), previous);
       setMessages((current) => [
         ...current,
         { id: uid(), role: "halku", text: answer.text, grounded: answer.grounded },

@@ -32,8 +32,42 @@ describe("classifyHalkuQuestion", () => {
     ["What does Equipment do?", "define_equipment_field"],
     ["How do I save a meal?", "how_to_save_meal"],
     ["What should I do if I am too fatigued to increase the weight?", "fatigue_guidance"],
+    ["What can you do?", "capabilities"],
+    ["How can you help me?", "capabilities"],
+    ["What are you for?", "capabilities"],
+    ["What is Recent?", "define_recent_feature"],
+    ["What are Saved meals?", "define_saved_meals_feature"],
+    ["How do I scan a barcode?", "how_to_scan_barcode"],
+    ["Am I progressing?", "why_progression_status"],
+    ["What changed this week?", "why_progression_status"],
+    ["How much protein did I eat today?", "personal_food_analysis"],
+    ["What am I missing today?", "personal_food_analysis"],
+    ["How am I doing against my calorie target?", "personal_food_analysis"],
+    ["Where do I find my saved meals?", "where_to_find"],
+    ["Where do I find Progress?", "where_to_find"],
   ])("classifies %j as %s", (question, expected) => {
     expect(classifyHalkuQuestion(question).kind).toBe(expected);
+  });
+
+  it("resolves a generic follow-up against the previous question", () => {
+    const intent = classifyHalkuQuestion(
+      "What should I do next?",
+      "Why didn't you recommend increasing my bicep weight?",
+    );
+    expect(intent.kind).toBe("why_progression_status");
+    expect(intent.muscleGroupHint).toBe("Biceps");
+  });
+
+  it("a generic follow-up with no previous question is unknown, not guessed", () => {
+    expect(classifyHalkuQuestion("What should I do next?").kind).toBe("unknown");
+  });
+
+  it("tags where_to_find with the right navigation target", () => {
+    expect(classifyHalkuQuestion("Where do I find my saved meals?").navigationTarget).toBe(
+      "saved_meals",
+    );
+    expect(classifyHalkuQuestion("Where do I find Progress?").navigationTarget).toBe("progress");
+    expect(classifyHalkuQuestion("Where do I find Log Workout?").navigationTarget).toBe("workout");
   });
 
   it("extracts a canonical muscle group from a free-text question", () => {
@@ -106,6 +140,42 @@ describe("buildHalkuAnswer — action requests are honest, never claim to have a
     expect(answer.grounded).toBe(false);
     expect(answer.text.toLowerCase()).not.toContain("not confident");
     expect(answer.text.toLowerCase()).toContain("recover");
+  });
+
+  it("explains capabilities directly instead of the generic fallback", () => {
+    const answer = buildHalkuAnswer({ kind: "capabilities" }, empty);
+    expect(answer.grounded).toBe(false);
+    expect(answer.text.toLowerCase()).not.toContain("not confident");
+    expect(answer.text.toLowerCase()).toContain("explain");
+    expect(answer.text.toLowerCase()).toContain("can't");
+  });
+
+  it("explains the Recent feature by name", () => {
+    const answer = buildHalkuAnswer({ kind: "define_recent_feature" }, empty);
+    expect(answer.text.toLowerCase()).toContain("recent");
+  });
+
+  it("explains the Saved meals feature by name", () => {
+    const answer = buildHalkuAnswer({ kind: "define_saved_meals_feature" }, empty);
+    expect(answer.text.toLowerCase()).toContain("saved");
+  });
+
+  it("gives direct steps for scanning a barcode", () => {
+    const answer = buildHalkuAnswer({ kind: "how_to_scan_barcode" }, empty);
+    expect(answer.text.toLowerCase()).toContain("barcode");
+  });
+
+  it("points to a real screen for where_to_find with a resolved target", () => {
+    const answer = buildHalkuAnswer(
+      { kind: "where_to_find", navigationTarget: "saved_meals" },
+      empty,
+    );
+    expect(answer.text).toContain("Saved");
+  });
+
+  it("asks a real clarifying question for where_to_find with no resolved target", () => {
+    const answer = buildHalkuAnswer({ kind: "where_to_find" }, empty);
+    expect(answer.text.toLowerCase()).toContain("which one");
   });
 });
 
@@ -198,6 +268,43 @@ describe("buildHalkuAnswer — grounds real data when available, labelled clearl
     expect(legs.text).toContain("Progressed");
     expect(biceps.text).toContain("Curl");
     expect(biceps.text).toContain("Progressed");
+  });
+
+  it("grounds a personal food analysis answer in today's real totals with a next step", () => {
+    const data: HalkuKnownData = {
+      today: { calories: 1800, proteinG: 90, calorieTarget: 2550, proteinTargetG: 130 },
+    };
+    const answer = buildHalkuAnswer({ kind: "personal_food_analysis" }, data);
+    expect(answer.grounded).toBe(true);
+    expect(answer.text).toContain("90");
+    expect(answer.text).toContain("130");
+    expect(answer.text).toContain("40"); // remaining protein
+    expect(answer.text.toLowerCase()).toContain("halku's take");
+  });
+
+  it("a personal food analysis question with no today data says so honestly", () => {
+    const answer = buildHalkuAnswer({ kind: "personal_food_analysis" }, {});
+    expect(answer.grounded).toBe(false);
+    expect(answer.text.toLowerCase()).toContain("don't have enough");
+  });
+
+  it("a progression answer includes a concrete next-step recommendation, not just the status", () => {
+    const data: HalkuKnownData = {
+      progressRows: [
+        {
+          exerciseName: "Barbell Curl",
+          muscleGroup: "Biceps",
+          status: "maintained",
+          explanation: "Same weight, reps and sets as last time.",
+        },
+      ],
+    };
+    const answer = buildHalkuAnswer(
+      { kind: "why_progression_status", muscleGroupHint: "Biceps" },
+      data,
+    );
+    expect(answer.text.toLowerCase()).toContain("halku's take");
+    expect(answer.text.toLowerCase()).toContain("nudge");
   });
 
   it("falls back to an honest message when the named muscle group has no row yet", () => {

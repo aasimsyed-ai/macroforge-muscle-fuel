@@ -15,26 +15,28 @@ export type HalkuGuidanceState =
 
 /**
  * Halku's visual mark — a free-standing character, not a photo in a card.
- * The source PNGs have a solid black backdrop baked in (verified by
- * sampling pixels: fully opaque (0,0,0,255) for the masculine art; the
- * feminine art already has real alpha-transparent corners). `mix-blend-mode:
- * screen` looks like it solves this in isolation, but it doesn't actually
- * work on a genuinely opaque image — per the CSS Compositing spec, a
- * blended element composites against whatever has already been painted
- * *within its own stacking context*, not simply "the page behind it"; with
- * nothing else painted there first, an opaque black pixel has nothing to
- * blend with and paints as plain opaque black — reproduced live as a
- * visible black box specifically on the masculine asset (whose PNG has no
- * real transparency), while the feminine asset looked fine only because
- * its own alpha channel was already doing the work.
+ * The masculine PNG has a solid black backdrop baked in with no real alpha
+ * at all (verified by sampling pixels: fully opaque (0,0,0,255) everywhere
+ * outside the figure). An SVG luminance-key filter (`#halku-key-filter`
+ * below) fakes transparency for it at display time: it recomputes each
+ * pixel's alpha from its own brightness, so truly black background pixels
+ * become transparent while the character's own colors stay opaque. The
+ * PNG file itself is never touched.
  *
- * The actual fix: an SVG luminance-key filter (`#halku-key-filter` below)
- * that recomputes each pixel's alpha from its own brightness — reading
- * only R/G/B, ignoring whatever alpha the source already had, so it works
- * identically for a fully-opaque PNG and one with real transparency. Truly
- * black pixels (the backdrop) become fully transparent; the character's
- * own colors (green skin, bright accents) stay opaque. This is a display-
- * time filter only — the PNG files themselves are never touched.
+ * The feminine PNG is different — it already has real, if hard-edged
+ * (unfeathered), alpha transparency baked in by whatever produced it.
+ * Running the same luminance filter on top of that real alpha was actively
+ * harmful, not merely redundant: it re-derives a *second*, differently-
+ * shaped alpha boundary from raw brightness on top of the cutout that's
+ * already there, and the two disagreeing edges is what produced a reported
+ * pixelated/scattered/haloed appearance — verified by sampling the source
+ * file directly, which has a clean (if abrupt) transparency edge and looks
+ * sharp when rendered plainly, before any of this component's processing.
+ * So the filter is applied conditionally, per `halkuAssets.ts`'s
+ * `needsBlackKeyFilter` (sampled per-file, not guessed): true for the
+ * masculine asset, false for the feminine one, which renders through its
+ * own real alpha untouched.
+ *
  * `object-fit: contain` keeps the full figure — head to feet — intact at
  * any container size, no cropping.
  *
@@ -69,21 +71,25 @@ export function HalkuAvatar({
   className?: string;
   interactive?: boolean;
 }) {
-  const artSrc = HALKU_CHARACTER_ART[gender];
-  if (artSrc) {
+  const art = HALKU_CHARACTER_ART[gender];
+  if (art) {
     return (
       <span className={cn("relative inline-block shrink-0", className)}>
-        <svg width="0" height="0" className="absolute" aria-hidden="true">
-          <defs>
-            <filter id="halku-key-filter" colorInterpolationFilters="sRGB">
-              {/* Keep R/G/B unchanged; alpha becomes each pixel's own
-                  brightness (ignoring source alpha entirely), so a solid
-                  black background — opaque or not — becomes transparent
-                  while the character's own colors stay visible. */}
-              <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  6 6 6 0 0" />
-            </filter>
-          </defs>
-        </svg>
+        {art.needsBlackKeyFilter ? (
+          <svg width="0" height="0" className="absolute" aria-hidden="true">
+            <defs>
+              <filter id="halku-key-filter" colorInterpolationFilters="sRGB">
+                {/* Keep R/G/B unchanged; alpha becomes each pixel's own
+                    brightness (ignoring source alpha entirely), so a solid
+                    black background — opaque, no real alpha channel at
+                    all — becomes transparent while the character's own
+                    colors stay visible. Only used for art that actually
+                    needs it (see this file's top doc comment). */}
+                <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  6 6 6 0 0" />
+              </filter>
+            </defs>
+          </svg>
+        ) : null}
         {interactive ? (
           <span
             aria-hidden="true"
@@ -98,10 +104,10 @@ export function HalkuAvatar({
           )}
         >
           <img
-            src={artSrc}
+            src={art.src}
             alt="Halku, personal AI trainer"
             className="size-full object-contain"
-            style={{ filter: "url(#halku-key-filter)" }}
+            style={art.needsBlackKeyFilter ? { filter: "url(#halku-key-filter)" } : undefined}
           />
         </span>
       </span>
@@ -153,8 +159,8 @@ export function HalkuAvatar({
  * circle shows mostly torso, not a recognizable face.
  */
 export function HalkuHeadshot({ gender, className }: { gender: HalkuGender; className?: string }) {
-  const artSrc = HALKU_CHARACTER_ART[gender];
-  if (!artSrc) return <HalkuAvatar gender={gender} {...(className ? { className } : {})} />;
+  const art = HALKU_CHARACTER_ART[gender];
+  if (!art) return <HalkuAvatar gender={gender} {...(className ? { className } : {})} />;
 
   return (
     <span
@@ -162,7 +168,7 @@ export function HalkuHeadshot({ gender, className }: { gender: HalkuGender; clas
       aria-label="Halku, personal AI trainer"
       className={cn("inline-block shrink-0 overflow-hidden rounded-full bg-black/80", className)}
       style={{
-        backgroundImage: `url(${artSrc})`,
+        backgroundImage: `url(${art.src})`,
         backgroundSize: "280% auto",
         backgroundPosition: "50% 0%",
         backgroundRepeat: "no-repeat",
