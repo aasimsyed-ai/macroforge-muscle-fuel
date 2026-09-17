@@ -400,8 +400,9 @@ const STATUS_NEXT_STEP: Record<string, string> = {
  * Halku v1 has no write access to any table — it can only ever explain, never
  * perform, an action the user asks for. Answers honestly with the shortest
  * real path instead of a flat refusal, and never implies the action already
- * happened. Text is plain sentences + a numbered list, matching exactly what
- * HalkuMessageContent already renders (no new markup needed).
+ * happened. Text uses plain sentences plus light markdown (headings,
+ * bullets, numbered steps, **bold**), rendered by the UI's own Streamdown-
+ * based message renderer.
  */
 function actionRequestAnswer(target: HalkuActionTarget): string {
   if (target === "workout") {

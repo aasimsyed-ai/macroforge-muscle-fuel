@@ -160,6 +160,11 @@ export async function createWorkoutSession(
     })),
   }));
 
+  // The generated RPC Args type marks every param as required/non-null —
+  // the actual Postgres function accepts null for the optional ones (it has
+  // SQL-side defaults); the type generator just doesn't reflect that. Cast
+  // at the call site only, same as the existing p_exercises cast just below,
+  // rather than touching the generated types file or the DB function itself.
   const { data, error } = await supabase.rpc("create_workout_session", {
     p_workout_date: draft.workoutDate,
     p_duration_minutes: draft.durationMinutes,
@@ -175,7 +180,7 @@ export async function createWorkoutSession(
     p_total_volume: totalVolume,
     p_notes: draft.notes || null,
     p_exercises: exercises as unknown as Json,
-  });
+  } as unknown as Database["public"]["Functions"]["create_workout_session"]["Args"]);
 
   if (error) throw error;
   if (!data) throw new Error("The workout could not be saved. Please try again.");

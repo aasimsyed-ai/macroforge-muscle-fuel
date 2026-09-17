@@ -1,11 +1,23 @@
 import { useEffect, useState } from "react";
 import { endOfDay, startOfDay } from "date-fns";
-import { Send, Sparkles } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 
+import {
+  Conversation,
+  ConversationContent,
+  ConversationScrollButton,
+} from "@/components/ai-elements/conversation";
+import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
+import {
+  PromptInput,
+  PromptInputFooter,
+  PromptInputSubmit,
+  PromptInputTextarea,
+} from "@/components/ai-elements/prompt-input";
+import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { useGoals, useMeals } from "@/lib/data";
 import { guestActive } from "@/lib/guest";
 import { answerHalkuQuestion } from "@/lib/halku/api";
@@ -15,7 +27,6 @@ import { sumMeals } from "@/lib/nutrition";
 import { useExerciseProgressBoard } from "@/lib/workouts/hooks";
 
 import { HalkuAvatar, HalkuHeadshot } from "./HalkuAvatar";
-import { HalkuMessageContent } from "./HalkuMessageContent";
 
 // Compact chip label vs. the full question actually sent — keeps the quick-
 // question row scannable and not wrapped in a wall of text on small screens
@@ -156,24 +167,28 @@ export function HalkuPanel() {
           `aria-label` (screen readers/mobile) are what say what Halku is —
           intentionally not a permanent on-screen label, so nothing else
           about the character's presentation implies a UI chrome element. */}
-      <div className="fixed bottom-24 right-3 z-40 sm:bottom-8 sm:right-5">
+      <div className="fixed bottom-[5.25rem] right-2 z-40 sm:bottom-5 sm:right-5">
         <div
-          className="pointer-events-none absolute inset-x-3 bottom-0 h-2 rounded-full bg-black/40 blur-sm sm:inset-x-4"
+          className="pointer-events-none absolute inset-x-3 bottom-0 h-2 rounded-full bg-foreground/15 blur-sm sm:inset-x-4"
           aria-hidden="true"
         />
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={() => setOpen(true)}
           aria-label="Open Halku — your Personal AI Trainer and guide for using Muscle Fuel"
           title={"Halku\nPersonal AI Trainer\nAsk Halku anything"}
-          className="group relative block h-[136px] w-[91px] cursor-pointer rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:h-[188px] sm:w-[125px]"
+          className="group relative block h-[112px] w-[76px] overflow-visible rounded-2xl p-0 hover:bg-transparent sm:h-[150px] sm:w-[100px]"
         >
           <HalkuAvatar
             gender={gender}
             interactive
-            className="h-[136px] w-[91px] sm:h-[188px] sm:w-[125px]"
+            className="h-[112px] w-[76px] drop-shadow-xl sm:h-[150px] sm:w-[100px]"
           />
-        </button>
+          <span className="absolute bottom-1 right-0 rounded-full border border-primary/30 bg-card px-2 py-1 text-[10px] font-bold text-primary shadow-lg">
+            ASK
+          </span>
+        </Button>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -181,20 +196,21 @@ export function HalkuPanel() {
             couple of messages, the dialog should hug its actual content
             instead of reserving a tall, mostly-blank rectangle. `max-h`
             only caps it once there's enough conversation to need one. */}
-        <DialogContent className="flex max-h-[85vh] w-[calc(100vw-2rem)] max-w-md flex-col gap-3 sm:max-w-lg">
+        <DialogContent className="flex max-h-[88vh] w-[calc(100vw-1rem)] max-w-md flex-col gap-3 overflow-hidden p-0 sm:max-w-lg">
           <DialogHeader>
-            <div className="flex items-center gap-2">
-              <HalkuHeadshot gender={gender} className="size-12 shrink-0" />
+            <div className="flex items-center gap-3 border-b border-border bg-secondary/40 px-4 py-3 pr-12">
+              <HalkuHeadshot gender={gender} className="size-14 shrink-0 shadow-sm" />
               <div className="min-w-0 flex-1 text-left">
-                <DialogTitle className="text-base leading-tight">Halku</DialogTitle>
-                <p className="text-[11px] font-medium uppercase tracking-wide text-primary">
-                  Personal AI Trainer
+                <DialogTitle className="text-lg leading-tight">Halku</DialogTitle>
+                <p className="text-xs font-semibold text-primary">Your personal AI trainer</p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">
+                  Fitness · food · your progress
                 </p>
               </div>
               <div
                 role="radiogroup"
                 aria-label="Halku's appearance"
-                className="flex shrink-0 gap-0.5 rounded-full bg-secondary p-0.5 text-xs"
+                className="flex shrink-0 gap-0.5 rounded-full border border-border bg-background/60 p-0.5 text-[10px]"
               >
                 {GENDER_OPTIONS.map((option) => (
                   <button
@@ -203,7 +219,7 @@ export function HalkuPanel() {
                     role="radio"
                     aria-checked={gender === option.value}
                     onClick={() => selectGender(option.value)}
-                    className={`rounded-full px-2.5 py-1 font-medium transition-colors ${
+                    className={`rounded-full px-2 py-1 font-medium transition-colors ${
                       gender === option.value
                         ? "bg-card text-foreground shadow-sm"
                         : "text-muted-foreground hover:text-foreground"
@@ -221,90 +237,90 @@ export function HalkuPanel() {
               actual content up to `max-h`, then scrolls internally, so the
               input row below always stays right under the conversation
               instead of pinned to the bottom of a mostly-empty box. */}
-          <div className="max-h-[50vh] min-h-12 space-y-2 overflow-y-auto rounded-md bg-secondary/40 p-2">
-            {messages.length === 0 ? (
-              <p className="p-2 text-xs text-muted-foreground">
-                {isGuest
-                  ? "I can help with general fitness and nutrition questions. Create an account to also ask about your own workout progress."
-                  : "Ask me anything — I'll say \"Your data shows…\" when an answer uses your real logged history, and tell you honestly when I don't have enough data."}
-              </p>
-            ) : (
-              messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`rounded-lg p-2.5 text-sm leading-snug ${
-                    message.role === "user"
-                      ? "ml-6 bg-primary/15 text-right"
-                      : message.isError
-                        ? "mr-6 border border-destructive/30 bg-destructive/10"
-                        : "mr-6 bg-card"
-                  }`}
-                >
-                  {message.role === "halku" && message.grounded ? (
-                    <Badge variant="secondary" className="mb-1">
-                      Your data
-                    </Badge>
-                  ) : null}
-                  {message.role === "halku" ? (
-                    <HalkuMessageContent text={message.text} />
-                  ) : (
-                    <p>{message.text}</p>
-                  )}
+          <Conversation className="mx-3 min-h-20 max-h-[48vh] rounded-md bg-secondary/30">
+            <ConversationContent className="gap-3 p-3">
+              {messages.length === 0 ? (
+                <div className="flex items-start gap-3 py-1">
+                  <HalkuHeadshot gender={gender} className="size-9" />
+                  <p className="pt-1 text-xs leading-relaxed text-muted-foreground">
+                    {isGuest
+                      ? "Ask me about fitness or nutrition. Sign in when you want guidance based on your own progress."
+                      : "Ask me anything. When I use your logs, I'll clearly say “Your data shows…”"}
+                  </p>
                 </div>
-              ))
-            )}
-            {sending ? (
-              <div className="mr-6 flex items-center gap-1 rounded-lg bg-card p-2.5">
-                <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.3s]" />
-                <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.15s]" />
-                <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground" />
-                <span className="sr-only">Halku is thinking…</span>
-              </div>
-            ) : null}
-          </div>
+              ) : (
+                messages.map((message) => (
+                  <Message key={message.id} from={message.role === "user" ? "user" : "assistant"}>
+                    <div className="flex items-start gap-2">
+                      {message.role === "halku" ? (
+                        <HalkuHeadshot gender={gender} className="mt-0.5 size-7" />
+                      ) : null}
+                      <MessageContent
+                        className={
+                          message.isError
+                            ? "rounded-md border border-destructive/30 bg-destructive/10 p-2.5"
+                            : undefined
+                        }
+                      >
+                        {message.role === "halku" && message.grounded ? (
+                          <Badge variant="secondary" className="w-fit text-[10px]">
+                            Your data
+                          </Badge>
+                        ) : null}
+                        <MessageResponse>{message.text}</MessageResponse>
+                      </MessageContent>
+                    </div>
+                  </Message>
+                ))
+              )}
+              {sending ? (
+                <div className="flex items-center gap-2">
+                  <HalkuHeadshot gender={gender} className="size-7" />
+                  <Shimmer className="text-xs">Halku is thinking…</Shimmer>
+                </div>
+              ) : null}
+            </ConversationContent>
+            <ConversationScrollButton className="bottom-2 size-8" />
+          </Conversation>
 
           {messages.length === 0 ? (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="mx-3 flex flex-wrap gap-1.5">
               {QUICK_QUESTIONS.map(({ label, question }) => (
-                <button
+                <Button
                   key={question}
                   type="button"
+                  variant="outline"
+                  size="sm"
                   onClick={() => void ask(question)}
-                  className="rounded-full border border-border bg-card px-2.5 py-1.5 text-left text-[11px] transition-colors hover:border-primary hover:bg-primary/5 active:scale-95"
+                  className="h-auto rounded-full px-2.5 py-1.5 text-left text-[11px] font-medium whitespace-normal"
                 >
                   {label}
-                </button>
+                </Button>
               ))}
             </div>
           ) : null}
 
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              void ask(input);
-            }}
-            className="flex gap-2"
-          >
-            <Input
+          <PromptInput onSubmit={({ text }) => void ask(text)} className="mx-3 w-auto">
+            <PromptInputTextarea
               value={input}
               onChange={(event) => setInput(event.target.value)}
               placeholder="Ask Halku…"
               aria-label="Ask Halku"
               disabled={sending}
+              className="min-h-14 max-h-28"
             />
-            <Button
-              type="submit"
-              size="icon"
-              disabled={sending || !input.trim()}
-              aria-label="Send"
-              className="shrink-0 transition-transform active:scale-90"
-            >
-              <Send className="size-4" />
-            </Button>
-          </form>
-          <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
-            <Sparkles className="size-3" aria-hidden="true" /> Halku never invents your workout or
-            food data.
+            <PromptInputFooter className="justify-end">
+              <PromptInputSubmit
+                {...(sending ? { status: "submitted" as const } : {})}
+                disabled={sending || !input.trim()}
+                aria-label="Send"
+                className="shrink-0"
+              />
+            </PromptInputFooter>
+          </PromptInput>
+          <p className="mx-4 mb-3 flex items-center gap-1 text-[10px] text-muted-foreground">
+            <ShieldCheck className="size-3 text-primary" aria-hidden="true" /> Halku never invents
+            your workout or food data.
           </p>
         </DialogContent>
       </Dialog>
