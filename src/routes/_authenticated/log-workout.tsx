@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
 import { AppShell } from "@/components/app/AppShell";
+import { SectionGuide } from "@/components/app/SectionGuide";
 import { WorkoutAccountRequired } from "@/components/workout/WorkoutAccountRequired";
 import { WorkoutLogger } from "@/components/workout/WorkoutLogger";
 import { guestActive } from "@/lib/guest";
@@ -35,6 +36,9 @@ function LogWorkout() {
 
   return (
     <AppShell title="Log Workout" subtitle="Exercises, sets and load — the same tracker as the Workout tab">
+      <div className="mb-3 flex justify-end">
+        <SectionGuide section="workout" />
+      </div>
       {isGuest ? (
         // Tell a guest up front that workouts need an account, before they
         // spend time filling in exercises/sets that would fail at save time.

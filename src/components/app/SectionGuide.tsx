@@ -1,6 +1,4 @@
 import { useEffect, useState } from "react";
-import { HelpCircle } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -55,22 +53,23 @@ export function SectionGuide({ section }: { section: GuideSectionId }) {
 
   return (
     <>
-      <Button
+       <Button
         type="button"
         variant="ghost"
-        size="icon"
-        className="size-8 shrink-0 text-muted-foreground"
+         size="sm"
+         className="h-9 shrink-0 gap-1.5 rounded-full border border-primary/20 bg-card/70 px-2 text-muted-foreground hover:border-primary/40 hover:bg-primary/10 hover:text-foreground"
         aria-label={`${content.title} guide`}
         onClick={() => setOpen(true)}
       >
-        <HelpCircle className="size-4" />
+         <HalkuHeadshot gender={gender} className="size-6" />
+         <span className="hidden text-[11px] font-semibold sm:inline">Quick guide</span>
       </Button>
 
       <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : dismiss())}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <div className="flex items-center gap-2">
-              <HalkuHeadshot gender={gender} className="size-10 shrink-0" />
+               <HalkuHeadshot gender={gender} className="size-12 shrink-0 shadow-sm" />
               <div className="min-w-0 flex-1 text-left">
                 <p className="text-[10px] font-medium uppercase tracking-wide text-primary">
                   Halku's quick guide

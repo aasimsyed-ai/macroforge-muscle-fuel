@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { AppShell } from "@/components/app/AppShell";
+import { SectionGuide } from "@/components/app/SectionGuide";
 import {
   BarcodeScannerDialog,
   isBarcodeScanningSupported,
@@ -702,6 +703,9 @@ function AddMeal() {
         isEdit ? "Update anything and save" : "Photo optional · every estimate stays editable"
       }
     >
+      <div className="mb-3 flex justify-end">
+        <SectionGuide section="food" />
+      </div>
       {barcodeSupported ? (
         <BarcodeScannerDialog
           open={scannerOpen}
