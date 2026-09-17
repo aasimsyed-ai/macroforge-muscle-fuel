@@ -11,8 +11,11 @@ import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 export type ConversationProps = ComponentProps<typeof StickToBottom>;
 
 export const Conversation = ({ className, ...props }: ConversationProps) => (
+  // Deliberately no height/flex sizing on this wrapper — see
+  // ConversationContent below for why, and where the actual size (grow with
+  // content, cap at some max, then scroll) is now applied.
   <StickToBottom
-    className={cn("relative flex-1 overflow-y-hidden", className)}
+    className={cn("relative", className)}
     initial="smooth"
     resize="smooth"
     role="log"
@@ -22,8 +25,33 @@ export const Conversation = ({ className, ...props }: ConversationProps) => (
 
 export type ConversationContentProps = ComponentProps<typeof StickToBottom.Content>;
 
-export const ConversationContent = ({ className, ...props }: ConversationContentProps) => (
-  <StickToBottom.Content className={cn("flex flex-col gap-8 p-4", className)} {...props} />
+export const ConversationContent = ({
+  className,
+  scrollClassName,
+  ...props
+}: ConversationContentProps) => (
+  // StickToBottom.Content renders the real scrollable element (ref=scrollRef)
+  // with an inline `height: 100%`, meant to be resolved against a parent
+  // with a definite pixel height (e.g. a full-height chat page). This
+  // component is instead used inside a shrink-wrapped dialog, where
+  // `Conversation`'s own height depends on flex-grow/max-height rather than
+  // an explicit `height` — several browsers treat that as *indefinite* for
+  // resolving a descendant's percentage height, so `height: 100%` silently
+  // computes as `auto` there. That's actually fine on its own (the element
+  // grows to fit its content, which is what a short conversation wants) —
+  // the bug was that nothing then capped it for a LONG conversation, so it
+  // grew unbounded, got clipped by an ancestor's `overflow-hidden` with no
+  // visible scrollbar, and wheel/touch scroll fell through to the page
+  // instead of scrolling here. Passing an explicit `max-h-*` (a real,
+  // non-percentage bound) plus `overflow-y-auto` via `scrollClassName`
+  // fixes both at once: short conversations still size to content, long
+  // ones clip and scroll on this exact element, independent of how
+  // `Conversation`'s own box was sized.
+  <StickToBottom.Content
+    className={cn("flex flex-col gap-8 p-4", className)}
+    scrollClassName={cn("overflow-y-auto overscroll-contain", scrollClassName)}
+    {...props}
+  />
 );
 
 export type ConversationEmptyStateProps = ComponentProps<"div"> & {

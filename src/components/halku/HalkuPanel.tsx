@@ -157,38 +157,44 @@ export function HalkuPanel() {
       {/* The launcher is a free-standing character — no card, box, or frame
           (see HalkuAvatar's own doc comment for how the source art's flat
           backdrop is made to disappear against this dark UI). The outer
-          wrapper carries the fixed position/z-index/tap target and a soft
-          ground-shadow ellipse; the button is sized to the source art's own
-          2:3 ratio at every breakpoint so the whole figure — head to feet —
-          shows with no cropping. Sized to be clearly noticeable — ~136px
-          tall on mobile, ~188px on larger screens — while staying a fixed
-          corner element that can't cause horizontal scrolling or sit over
-          other controls. The native `title` tooltip (desktop hover) and
-          `aria-label` (screen readers/mobile) are what say what Halku is —
-          intentionally not a permanent on-screen label, so nothing else
-          about the character's presentation implies a UI chrome element. */}
-      <div className="fixed bottom-[5.25rem] right-2 z-40 sm:bottom-5 sm:right-5">
+          wrapper carries the fixed position and a soft ground-shadow
+          ellipse; the character itself is sized to the source art's own 2:3
+          ratio at every breakpoint so the whole figure — head to feet —
+          shows with no cropping.
+          Only the outer wrapper is `pointer-events-none` — the visible
+          character/shadow render at their full "clearly noticeable" size,
+          but the actual clickable hit-target (the `<button>` below) is a
+          smaller region inset from that box. Real pages can scroll enough
+          content under this fixed corner for it to reach a page's own
+          buttons (e.g. a food item's per-row "Remove" button in a longer
+          Add Meal list) — confirmed by measuring the rendered button's
+          bounding box against nearby page controls. A full-box hit-target
+          made those controls permanently unclickable whenever they landed
+          under this corner, with no visible indication why. Insetting the
+          hit-target trades a little of the launcher's own tap-target size
+          for not silently eating clicks meant for the page underneath. */}
+      <div className="pointer-events-none fixed bottom-[5.25rem] right-2 z-40 sm:bottom-5 sm:right-5">
         <div
           className="pointer-events-none absolute inset-x-3 bottom-0 h-2 rounded-full bg-foreground/15 blur-sm sm:inset-x-4"
           aria-hidden="true"
         />
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => setOpen(true)}
-          aria-label="Open Halku — your Personal AI Trainer and guide for using Muscle Fuel"
-          title={"Halku\nPersonal AI Trainer\nAsk Halku anything"}
-          className="group relative block h-[112px] w-[76px] overflow-visible rounded-2xl p-0 hover:bg-transparent sm:h-[150px] sm:w-[100px]"
-        >
+        <div className="group relative h-[112px] w-[76px] sm:h-[150px] sm:w-[100px]">
           <HalkuAvatar
             gender={gender}
             interactive
-            className="h-[112px] w-[76px] drop-shadow-xl sm:h-[150px] sm:w-[100px]"
+            className="pointer-events-none h-[112px] w-[76px] drop-shadow-xl sm:h-[150px] sm:w-[100px]"
           />
-          <span className="absolute bottom-1 right-0 rounded-full border border-primary/30 bg-card px-2 py-1 text-[10px] font-bold text-primary shadow-lg">
+          <span className="pointer-events-none absolute bottom-1 right-0 rounded-full border border-primary/30 bg-card px-2 py-1 text-[10px] font-bold text-primary shadow-lg">
             ASK
           </span>
-        </Button>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            aria-label="Open Halku — your Personal AI Trainer and guide for using Muscle Fuel"
+            title={"Halku\nPersonal AI Trainer\nAsk Halku anything"}
+            className="pointer-events-auto absolute inset-x-[15%] inset-y-[20%] rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          />
+        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -232,13 +238,15 @@ export function HalkuPanel() {
             </div>
           </DialogHeader>
 
-          {/* No `flex-1` — that forces this to fill all remaining dialog
-              height even for one short message. Instead it grows with its
-              actual content up to `max-h`, then scrolls internally, so the
-              input row below always stays right under the conversation
-              instead of pinned to the bottom of a mostly-empty box. */}
-          <Conversation className="mx-3 min-h-20 max-h-[48vh] rounded-md bg-secondary/30">
-            <ConversationContent className="gap-3 p-3">
+          {/* The `max-h-[48vh]`/`overflow-y-auto` cap lives on
+              ConversationContent's `scrollClassName` (the real scrollable
+              element), not here — see conversation.tsx for why. That's what
+              lets this grow to fit a short conversation, cap at 48% of the
+              viewport height for a long one, and scroll internally once a
+              reply is longer than that, instead of silently clipping with
+              no way to reach the rest of it. */}
+          <Conversation className="mx-3 rounded-md bg-secondary/30">
+            <ConversationContent className="gap-3 p-3" scrollClassName="max-h-[48vh] rounded-md">
               {messages.length === 0 ? (
                 <div className="flex items-start gap-3 py-1">
                   <HalkuHeadshot gender={gender} className="size-9" />
