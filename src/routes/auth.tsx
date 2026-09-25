@@ -11,6 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
+import { parseAuthCallback, resolveAuthView } from "@/lib/auth-state";
 import { guestActive, guestExpired, migrateGuestToCloud } from "@/lib/guest";
 
 const searchSchema = z.object({
@@ -24,10 +26,14 @@ export const Route = createFileRoute("/auth")({
       { title: "Sign in — MacroForge Nutrition Tracker" },
       {
         name: "description",
-        content: "Sign in to MacroForge to log meals, track macros and follow your lean-bulk progress across devices.",
+        content:
+          "Sign in to MacroForge to log meals, track macros and follow your lean-bulk progress across devices.",
       },
       { property: "og:title", content: "Sign in — MacroForge Nutrition Tracker" },
-      { property: "og:description", content: "Access your private nutrition and muscle-gain dashboard." },
+      {
+        property: "og:description",
+        content: "Access your private nutrition and muscle-gain dashboard.",
+      },
     ],
   }),
   component: AuthPage,
@@ -44,6 +50,8 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [trialOver, setTrialOver] = useState(false);
+  const { session, loading: authLoading } = useAuth();
+  const authView = resolveAuthView({ loading: authLoading, hasSession: session !== null });
 
   // One-time code (OTP) sign-in — by email or phone.
   const [codeChannel, setCodeChannel] = useState<"email" | "phone">("email");
@@ -66,9 +74,8 @@ function AuthPage() {
   }
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/dashboard", replace: true });
-    });
+    const callback = parseAuthCallback(window.location.search, window.location.hash);
+    if (callback.kind === "error") toast.error(callback.message);
     try {
       const saved = localStorage.getItem(LAST_EMAIL_KEY);
       if (saved) {
@@ -83,6 +90,11 @@ function AuthPage() {
       setTab("signup");
     }
   }, [navigate]);
+
+  // An existing session always wins over the sign-up/sign-in form.
+  useEffect(() => {
+    if (authView === "authenticated") navigate({ to: "/dashboard", replace: true });
+  }, [authView, navigate]);
 
   function rememberEmail(value: string) {
     try {
@@ -140,11 +152,17 @@ function AuthPage() {
       const { error } =
         codeChannel === "email"
           ? await supabase.auth.verifyOtp({ email: email.trim(), token, type: "email" })
-          : await supabase.auth.verifyOtp({ phone: phone.trim().replace(/\s+/g, ""), token, type: "sms" });
+          : await supabase.auth.verifyOtp({
+              phone: phone.trim().replace(/\s+/g, ""),
+              token,
+              type: "sms",
+            });
       if (error) throw error;
       await afterSignedIn();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "That code did not work — resend and try again.");
+      toast.error(
+        err instanceof Error ? err.message : "That code did not work — resend and try again.",
+      );
     } finally {
       setCodeBusy(false);
     }
@@ -166,7 +184,9 @@ function AuthPage() {
         if (data.session) {
           await afterSignedIn();
         } else {
-          toast.success("Check your email to confirm your account, then sign in.");
+          toast.success(
+            "Check your email and click the confirmation link — you'll be signed in automatically.",
+          );
           setTab("signin");
         }
       } else {
@@ -190,20 +210,36 @@ function AuthPage() {
     }
   }
 
+  if (authView !== "unauthenticated") {
+    return (
+      <div className="hero-glow flex min-h-screen flex-col items-center justify-center gap-3 px-4 text-center">
+        <Loader2 className="size-6 animate-spin text-primary" aria-hidden="true" />
+        <p className="text-sm text-muted-foreground" role="status">
+          {authView === "authenticated"
+            ? "Signed in — taking you to your dashboard…"
+            : "Checking your session…"}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="hero-glow flex min-h-screen items-center justify-center px-4 py-10">
       <div className="panel w-full max-w-md p-6">
         <div className="flex items-center gap-2 text-sm font-semibold text-primary">
           <Flame className="size-4" aria-hidden="true" /> MacroForge
         </div>
-        <h1 className="mt-2 text-2xl font-bold">{tab === "signup" ? "Create your account" : "Welcome back"}</h1>
+        <h1 className="mt-2 text-2xl font-bold">
+          {tab === "signup" ? "Create your account" : "Welcome back"}
+        </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Your meals, macros and body metrics stay private to your account.
         </p>
 
         {trialOver ? (
           <div className="mt-4 rounded-lg border border-primary/40 bg-primary/10 p-3 text-xs text-foreground">
-            Your 3-day trial has ended. Create a free account now and everything you logged on this device is kept.
+            Your 3-day trial has ended. Create a free account now and everything you logged on this
+            device is kept.
           </div>
         ) : null}
 
@@ -241,7 +277,13 @@ function AuthPage() {
             />
           </div>
           <Button type="submit" className="w-full" disabled={busy}>
-            {busy ? <Loader2 className="size-4 animate-spin" /> : tab === "signup" ? "Create account" : "Sign in"}
+            {busy ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : tab === "signup" ? (
+              "Create account"
+            ) : (
+              "Sign in"
+            )}
           </Button>
         </form>
 
@@ -261,7 +303,9 @@ function AuthPage() {
                   setCode("");
                 }}
                 className={`rounded px-2 py-1 capitalize transition-colors ${
-                  codeChannel === ch ? "bg-card font-semibold text-foreground" : "text-muted-foreground"
+                  codeChannel === ch
+                    ? "bg-card font-semibold text-foreground"
+                    : "text-muted-foreground"
                 }`}
               >
                 {ch}
