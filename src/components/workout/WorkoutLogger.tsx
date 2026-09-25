@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useId } from "react";
 import { format } from "date-fns";
 import { AlertCircle, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -97,6 +97,9 @@ export function WorkoutLogger({
   // wholesale (copy-from-previous, post-save reset) regenerates every key too,
   // so those rows still remount and drop stale local UI state on purpose (e.g.
   // a weight input's "custom vs preset" toggle).
+  // Unique per form instance: the dashboard can show the new-workout form and an
+  // edit-workout form together, and shared ids made labels focus the wrong field.
+  const formId = useId();
   const nextExerciseKey = useRef(1);
   const [exerciseKeys, setExerciseKeys] = useState<number[]>(() =>
     draft.exercises.map(() => nextExerciseKey.current++),
@@ -235,22 +238,22 @@ export function WorkoutLogger({
     <form onSubmit={submit} className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
-          <Label htmlFor="workout-date" className="text-xs">
+          <Label htmlFor={`${formId}-workout-date`} className="text-xs">
             Date
           </Label>
           <Input
-            id="workout-date"
+            id={`${formId}-workout-date`}
             type="date"
             value={draft.workoutDate}
             onChange={(event) => setDraft((c) => ({ ...c, workoutDate: event.target.value }))}
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="workout-phase" className="text-xs">
+          <Label htmlFor={`${formId}-workout-phase`} className="text-xs">
             Training phase
           </Label>
           <TrainingPhaseSelect
-            id="workout-phase"
+            id={`${formId}-workout-phase`}
             value={draft.trainingPhase}
             onChange={(value) => {
               phaseTouched.current = true;
@@ -259,7 +262,7 @@ export function WorkoutLogger({
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="workout-intensity" className="text-xs">
+          <Label htmlFor={`${formId}-workout-intensity`} className="text-xs">
             Intensity
           </Label>
           <Select
@@ -268,7 +271,7 @@ export function WorkoutLogger({
               setDraft((c) => ({ ...c, intensity: value as WorkoutIntensity }))
             }
           >
-            <SelectTrigger id="workout-intensity">
+            <SelectTrigger id={`${formId}-workout-intensity`}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -281,11 +284,11 @@ export function WorkoutLogger({
           </Select>
         </div>
         <div className="space-y-1">
-          <Label htmlFor="workout-duration" className="text-xs">
+          <Label htmlFor={`${formId}-workout-duration`} className="text-xs">
             Duration (minutes)
           </Label>
           <Input
-            id="workout-duration"
+            id={`${formId}-workout-duration`}
             type="number"
             inputMode="numeric"
             min={0}
@@ -301,7 +304,7 @@ export function WorkoutLogger({
 
       {!isEditing && recentSessions.data && recentSessions.data.length > 0 ? (
         <div className="space-y-1 rounded-lg border border-dashed border-border p-3">
-          <Label htmlFor="copy-previous-workout" className="text-xs">
+          <Label htmlFor={`${formId}-copy-previous-workout`} className="text-xs">
             Copy from a previous workout
           </Label>
           <Select
@@ -309,7 +312,7 @@ export function WorkoutLogger({
             disabled={copyingSessionId !== null}
             onValueChange={(value) => void copyFromSession(value)}
           >
-            <SelectTrigger id="copy-previous-workout">
+            <SelectTrigger id={`${formId}-copy-previous-workout`}>
               <SelectValue
                 placeholder={
                   copyingSessionId ? "Loading…" : "Select a past workout to reuse its exercises"
@@ -380,11 +383,11 @@ export function WorkoutLogger({
             </p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               <div className="space-y-1">
-                <Label htmlFor="avg-hr" className="text-[11px]">
+                <Label htmlFor={`${formId}-avg-hr`} className="text-[11px]">
                   Avg HR
                 </Label>
                 <Input
-                  id="avg-hr"
+                  id={`${formId}-avg-hr`}
                   type="number"
                   inputMode="numeric"
                   min={30}
@@ -399,11 +402,11 @@ export function WorkoutLogger({
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="max-hr" className="text-[11px]">
+                <Label htmlFor={`${formId}-max-hr`} className="text-[11px]">
                   Max HR
                 </Label>
                 <Input
-                  id="max-hr"
+                  id={`${formId}-max-hr`}
                   type="number"
                   inputMode="numeric"
                   min={30}
@@ -415,11 +418,11 @@ export function WorkoutLogger({
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="wearable-cal" className="text-[11px]">
+                <Label htmlFor={`${formId}-wearable-cal`} className="text-[11px]">
                   Wearable kcal
                 </Label>
                 <Input
-                  id="wearable-cal"
+                  id={`${formId}-wearable-cal`}
                   type="number"
                   inputMode="numeric"
                   min={0}
@@ -442,11 +445,11 @@ export function WorkoutLogger({
       </div>
 
       <div className="space-y-1">
-        <Label htmlFor="workout-notes" className="text-xs">
+        <Label htmlFor={`${formId}-workout-notes`} className="text-xs">
           Notes
         </Label>
         <Textarea
-          id="workout-notes"
+          id={`${formId}-workout-notes`}
           rows={2}
           placeholder="How it felt, what to change next time…"
           value={draft.notes}
@@ -455,9 +458,6 @@ export function WorkoutLogger({
       </div>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-secondary px-3 py-2 text-xs">
-        <span>
-          External-load volume: <strong>{Math.round(totalVolume).toLocaleString()} kg</strong>
-        </span>
         <span>
           Calories:{" "}
           <strong>

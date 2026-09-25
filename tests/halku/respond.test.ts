@@ -327,6 +327,49 @@ describe("buildHalkuAnswer — grounds real data when available, labelled clearl
   });
 });
 
+describe("how-to and glossary topics", () => {
+  it.each([
+    ["How do I log a workout?", "log_workout"],
+    ["how do I add a meal", "add_meal"],
+    ["How do I delete a meal?", "delete_meal"],
+    ["How do I edit a meal", "edit_meal"],
+    ["How do I add an exercise?", "add_exercise"],
+    ["How do I change my calorie target?", "change_target"],
+    ["What does Maintained mean?", "term_maintained"],
+    ["What does Progressed mean", "term_progressed"],
+    ["What is a deload?", "deload"],
+    ["How many reps should I do?", "sets_reps_guidance"],
+    ["How do I sign up?", "sign_up"],
+  ])("routes %j to topic %s with real steps", (question, topicId) => {
+    const intent = classifyHalkuQuestion(question);
+    expect(intent.kind).toBe("topic");
+    expect(intent.topicId).toBe(topicId);
+    const answer = buildHalkuAnswer(intent, {});
+    expect(answer.grounded).toBe(false);
+    expect(answer.text.toLowerCase()).not.toContain("not confident");
+  });
+
+  it.each([
+    ["Can you log a workout for me?", "workout"],
+    ["Please change my calorie target", "goal"],
+    ["Can you add a meal for me", "food"],
+  ])("a request for Halku to do it (%j) gets the capability limit, not bare steps", (q, target) => {
+    const intent = classifyHalkuQuestion(q);
+    expect(intent.kind).toBe("action_request");
+    expect(intent.actionTarget).toBe(target);
+  });
+
+  it("navigation phrasing still wins over a matching how-to topic", () => {
+    expect(classifyHalkuQuestion("Where do I find Log Workout?").kind).toBe("where_to_find");
+  });
+
+  it("how-to steps use real UI labels", () => {
+    const text = buildHalkuAnswer(classifyHalkuQuestion("How do I log a workout?"), {}).text;
+    expect(text).toContain("Log Workout");
+    expect(text).toContain("Save workout");
+  });
+});
+
 describe("answerHalkuQuestionLocally", () => {
   it("classifies and answers in one step", () => {
     const answer = answerHalkuQuestionLocally("What are sets and reps?", {});

@@ -1,3 +1,4 @@
+import { findTopic, topicById } from "./topics";
 import type { HalkuAnswer, HalkuKnownData } from "./types";
 
 /**
@@ -32,6 +33,7 @@ export type HalkuIntentKind =
   | "why_progression_status"
   | "personal_food_analysis"
   | "action_request"
+  | "topic"
   | "greeting"
   | "unknown";
 
@@ -50,6 +52,8 @@ export interface HalkuIntent {
   actionTarget?: HalkuActionTarget;
   /** Only set for "where_to_find" — see HalkuNavigationTarget. */
   navigationTarget?: HalkuNavigationTarget;
+  /** Only set for "topic" — an id from topics.ts. */
+  topicId?: string;
 }
 
 const MUSCLE_GROUP_KEYWORDS: ReadonlyArray<{ keywords: string[]; group: string }> = [
@@ -80,6 +84,16 @@ const FOLLOW_UP_PHRASES: readonly string[] = [
   "what else",
   "anything else",
   "what about now",
+];
+
+const NAVIGATION_PHRASES: readonly string[] = [
+  "where do i find",
+  "where is the",
+  "where can i find",
+  "where can i see",
+  "where do i see",
+  "how do i get to",
+  "where's the",
 ];
 
 function includesAny(text: string, keywords: readonly string[]): boolean {
@@ -239,6 +253,17 @@ export function classifyHalkuQuestion(raw: string, previousQuestion?: string): H
   ) {
     return { kind: "fatigue_guidance" };
   }
+  // Common how-to / glossary questions (data in topics.ts). A phrasing that
+  // asks Halku itself to do the task ("can you log a workout for me") gets the
+  // honest capability-limit answer, never the bare steps.
+  const topic = includesAny(text, NAVIGATION_PHRASES) ? undefined : findTopic(text);
+  if (topic) {
+    const asksHalkuToAct = includesAny(text, ["for me", "can you ", "could you ", "please "]);
+    if (asksHalkuToAct && topic.actionTarget) {
+      return { kind: "action_request", actionTarget: topic.actionTarget };
+    }
+    return { kind: "topic", topicId: topic.id };
+  }
   // Checked before action_request below: "why" is the unambiguous signal
   // that this is a question about a past/current status, not a request to
   // do something right now. Without this, "Why didn't you increase my
@@ -284,6 +309,10 @@ export function classifyHalkuQuestion(raw: string, previousQuestion?: string): H
       "protein so far",
       "calories so far",
       "am i on track today",
+      "eating enough protein",
+      "my calorie target",
+      "calories left",
+      "protein left",
       "am i on track with my",
     ])
   ) {
@@ -341,15 +370,7 @@ export function classifyHalkuQuestion(raw: string, previousQuestion?: string): H
   // status question. "saved" is checked before the generic food/meal check
   // so "where do I find my saved meals" resolves to the Saved tab
   // specifically, not just Add Meal.
-  if (
-    includesAny(text, [
-      "where do i find",
-      "where is the",
-      "where can i find",
-      "how do i get to",
-      "where's the",
-    ])
-  ) {
+  if (includesAny(text, NAVIGATION_PHRASES)) {
     let navigationTarget: HalkuNavigationTarget | undefined;
     if (includesAny(text, ["saved meal", "saved tab", "saved list"])) {
       navigationTarget = "saved_meals";
@@ -610,6 +631,11 @@ export function buildHalkuAnswer(intent: HalkuIntent, data: HalkuKnownData): Hal
         grounded: false,
         text: "I couldn't match that to one of your recently tracked exercises. Open the Progress board and ask me from there, or name the exact exercise.",
       };
+    }
+    case "topic": {
+      const topic = intent.topicId ? topicById(intent.topicId) : undefined;
+      if (topic) return { grounded: false, text: topic.text };
+      return buildHalkuAnswer({ kind: "unknown" }, data);
     }
     case "greeting":
       return {

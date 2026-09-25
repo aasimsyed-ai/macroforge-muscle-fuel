@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { HelpCircle, Minus, TrendingDown, TrendingUp } from "lucide-react";
 
+import { ProgressRing } from "@/components/app/ProgressRing";
 import { SectionGuide } from "@/components/app/SectionGuide";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -54,12 +55,17 @@ function periodSummary(stats: {
  */
 export function WorkoutProgressBoard() {
   const [period, setPeriod] = useState<ProgressBoardPeriod>("this_week");
+  const [filter, setFilter] = useState<ExerciseProgressStatus | "all">("all");
   const window = resolveProgressBoardWindow(period, new Date());
   const board = useExerciseProgressBoard(period);
 
   const rows = board.data ?? [];
   const trainedCount = rows.filter((row) => row.current.completedSets > 0).length;
   const progressedCount = rows.filter((row) => row.comparison.status === "progressed").length;
+  const countByStatus = (status: ExerciseProgressStatus) =>
+    rows.filter((row) => row.comparison.status === status).length;
+  const visibleRows =
+    filter === "all" ? rows : rows.filter((row) => row.comparison.status === filter);
 
   return (
     <div className="panel p-4">
@@ -107,12 +113,58 @@ export function WorkoutProgressBoard() {
         </p>
       ) : (
         <>
-          <p className="mt-3 text-xs text-muted-foreground">
-            {trainedCount} exercise{trainedCount === 1 ? "" : "s"} trained this period ·{" "}
-            {progressedCount} progressing
-          </p>
+          <div className="mt-3 flex items-center gap-4">
+            <ProgressRing
+              value={progressedCount}
+              target={Math.max(trainedCount, 1)}
+              label="Progressing"
+              unit={`of ${trainedCount}`}
+              size={92}
+              thickness={9}
+            />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-muted-foreground">
+                {trainedCount} exercise{trainedCount === 1 ? "" : "s"} trained · {progressedCount}{" "}
+                progressing
+              </p>
+              <div
+                className="mt-2 flex flex-wrap gap-1.5"
+                role="group"
+                aria-label="Filter by status"
+              >
+                {(
+                  [
+                    ["all", "All", rows.length],
+                    ["progressed", "Progressed", countByStatus("progressed")],
+                    ["maintained", "Maintained", countByStatus("maintained")],
+                    ["decreased", "Needs work", countByStatus("decreased")],
+                    ["insufficient_data", "No data", countByStatus("insufficient_data")],
+                  ] as const
+                ).map(([value, label, count]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setFilter(value)}
+                    aria-pressed={filter === value}
+                    className={`min-h-8 rounded-full border px-2.5 text-[11px] transition-colors ${
+                      filter === value
+                        ? "border-primary bg-primary/15 font-semibold text-foreground"
+                        : "border-border text-muted-foreground"
+                    }`}
+                  >
+                    {label} · {count}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          {visibleRows.length === 0 ? (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Nothing in this category for {window.label.toLowerCase()}.
+            </p>
+          ) : null}
           <ul className="mt-2 space-y-2">
-            {rows.map((row) => {
+            {visibleRows.map((row) => {
               const meta = STATUS_META[row.comparison.status];
               const Icon = meta.Icon;
               return (
@@ -130,7 +182,7 @@ export function WorkoutProgressBoard() {
                       {meta.label}
                     </Badge>
                   </div>
-                  <p className="mt-1.5 text-xs text-muted-foreground">
+                  <p className="mt-1.5 text-xs font-medium text-foreground">
                     {periodSummary(row.current)}
                     {row.previous.completedSets > 0 ? (
                       <span className="text-muted-foreground/70">

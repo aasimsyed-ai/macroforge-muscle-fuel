@@ -33,6 +33,7 @@ import { HalkuAvatar, HalkuHeadshot } from "./HalkuAvatar";
 // while still asking the exact phrasing lib/halku/respond.ts's keyword
 // classifier expects.
 const QUICK_QUESTIONS: ReadonlyArray<{ label: string; question: string }> = [
+  { label: "What can you do?", question: "What can you do?" },
   { label: "What's progressive overload?", question: "What does progressive overload mean?" },
   { label: "Sets vs. reps", question: "What are sets and reps?" },
   { label: "Log a homemade meal", question: "How do I log homemade food?" },
@@ -216,7 +217,7 @@ export function HalkuPanel() {
               <div
                 role="radiogroup"
                 aria-label="Halku's appearance"
-                className="flex shrink-0 gap-0.5 rounded-full border border-border bg-background/60 p-0.5 text-[10px]"
+                className="flex shrink-0 gap-0.5 rounded-full border border-border bg-background/60 p-0.5"
               >
                 {GENDER_OPTIONS.map((option) => (
                   <button
@@ -225,7 +226,7 @@ export function HalkuPanel() {
                     role="radio"
                     aria-checked={gender === option.value}
                     onClick={() => selectGender(option.value)}
-                    className={`rounded-full px-2 py-1 font-medium transition-colors ${
+                    className={`min-h-8 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                       gender === option.value
                         ? "bg-card text-foreground shadow-sm"
                         : "text-muted-foreground hover:text-foreground"
@@ -252,8 +253,8 @@ export function HalkuPanel() {
                   <HalkuHeadshot gender={gender} className="size-9" />
                   <p className="pt-1 text-xs leading-relaxed text-muted-foreground">
                     {isGuest
-                      ? "Ask me about fitness or nutrition. Sign in when you want guidance based on your own progress."
-                      : "Ask me anything. When I use your logs, I'll clearly say “Your data shows…”"}
+                      ? "I'm Halku, your personal AI trainer and guide to Muscle Fuel. Ask me about Workout, Food, progressive overload or how any feature works. Sign in when you want answers based on your own logs."
+                      : "I'm Halku, your personal AI trainer and guide to Muscle Fuel. Ask me about Workout, Food, Progress, progressive overload or how any feature works. When I use your logs, I'll say “Your data shows…”"}
                   </p>
                 </div>
               ) : (
