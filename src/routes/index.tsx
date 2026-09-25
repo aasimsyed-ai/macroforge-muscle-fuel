@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import { completeAuthCallback } from "@/lib/auth-callback";
 import { parseAuthCallback, resolveAuthView } from "@/lib/auth-state";
 import { ensureGuest } from "@/lib/guest";
 
@@ -62,7 +63,16 @@ function Landing() {
   // showing marketing / sign-up choices to someone who just signed in.
   useEffect(() => {
     const callback = parseAuthCallback(window.location.search, window.location.hash);
-    if (callback.kind === "pending") setVerifying(true);
+    if (callback.kind === "pending") {
+      setVerifying(true);
+      void completeAuthCallback(window.location.search, window.location.hash).then((problem) => {
+        window.history.replaceState(null, "", window.location.pathname);
+        if (problem) {
+          toast.error(problem);
+          navigate({ to: "/auth", search: { mode: "signin" }, replace: true });
+        }
+      });
+    }
     if (callback.kind === "error") {
       toast.error(callback.message);
       navigate({ to: "/auth", search: { mode: "signin" }, replace: true });
