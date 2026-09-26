@@ -186,3 +186,38 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.03em;
 }
+
+/* Halku's subtle idle "alive" motion for the standing floating-launcher
+   character — a barely-there weight shift, not a cartoon bounce. Only ever
+   applied via Tailwind's `motion-safe:` variant, so `prefers-reduced-motion`
+   users never see it. */
+@keyframes halku-breathe {
+  0%,
+  100% {
+    transform: scale(1) translateY(0);
+  }
+  50% {
+    transform: scale(1.015) translateY(-1px);
+  }
+}
+
+/* Halku's hover/press "acknowledged you" gesture: a brief lean-and-settle,
+   pivoting from the character's own feet (`transform-origin: bottom`, set
+   via the `origin-bottom` class alongside this animation) so it reads as a
+   posture change, not a distortion. Rotation-only — never a non-uniform
+   scale — so the figure's proportions stay exactly as drawn. One-shot
+   (`forwards`), not a loop; only ever applied via `motion-safe:`. */
+@keyframes halku-greet {
+  0% {
+    transform: rotate(0deg) translateY(0);
+  }
+  35% {
+    transform: rotate(-7deg) translateY(-3px);
+  }
+  65% {
+    transform: rotate(-3deg) translateY(-1px);
+  }
+  100% {
+    transform: rotate(-5deg) translateY(-2px);
+  }
+}

@@ -1,10 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import { format } from "date-fns";
 import { ImageIcon, Pencil, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useDeleteMeal, useMealPhotoUrl, type Meal } from "@/lib/data";
+import { describeEstimateSource } from "@/lib/food-estimate";
 import { categoryLabel } from "@/lib/nutrition";
 
 function MealPhoto({ path }: { path: string | null }) {
@@ -17,7 +19,12 @@ function MealPhoto({ path }: { path: string | null }) {
     );
   }
   return url ? (
-    <img src={url} alt="Meal photo" loading="lazy" className="size-14 shrink-0 rounded-lg object-cover" />
+    <img
+      src={url}
+      alt="Meal photo"
+      loading="lazy"
+      className="size-14 shrink-0 rounded-lg object-cover"
+    />
   ) : (
     <div className="size-14 shrink-0 animate-pulse rounded-lg bg-secondary" />
   );
@@ -25,6 +32,16 @@ function MealPhoto({ path }: { path: string | null }) {
 
 export function MealList({ meals }: { meals: Meal[] }) {
   const del = useDeleteMeal();
+
+  async function handleDelete(meal: Meal) {
+    if (!window.confirm(`Delete "${meal.name}"? This cannot be undone.`)) return;
+    try {
+      await del.mutateAsync(meal.id);
+      toast.success("Meal deleted");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not delete the meal");
+    }
+  }
 
   if (!meals.length) {
     return (
@@ -43,12 +60,19 @@ export function MealList({ meals }: { meals: Meal[] }) {
             <div className="flex flex-wrap items-center gap-2">
               <p className="truncate font-semibold">{m.name}</p>
               <Badge variant="secondary">{categoryLabel(m.category)}</Badge>
-              {m.is_estimate ? <Badge variant="outline">Approximate</Badge> : null}
+              {m.is_estimate ? (
+                <Badge
+                  variant="outline"
+                  title={describeEstimateSource(m.estimate_source) ?? undefined}
+                >
+                  Approximate
+                </Badge>
+              ) : null}
               {m.is_demo ? <Badge variant="outline">Demo</Badge> : null}
             </div>
             <p className="num mt-1 text-sm text-muted-foreground">
-              {Math.round(Number(m.calories))} kcal · P {Number(m.protein_g)}g · C {Number(m.carbs_g)}g · F{" "}
-              {Number(m.fat_g)}g
+              {Math.round(Number(m.calories))} kcal · P {Number(m.protein_g)}g · C{" "}
+              {Number(m.carbs_g)}g · F {Number(m.fat_g)}g
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
               {format(new Date(m.eaten_at), "EEE d MMM, HH:mm")}
@@ -67,7 +91,7 @@ export function MealList({ meals }: { meals: Meal[] }) {
               size="icon"
               aria-label={`Delete ${m.name}`}
               disabled={del.isPending}
-              onClick={() => del.mutate(m.id)}
+              onClick={() => handleDelete(m)}
             >
               <Trash2 className="size-4" />
             </Button>

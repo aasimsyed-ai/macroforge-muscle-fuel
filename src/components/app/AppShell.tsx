@@ -4,18 +4,28 @@ import { BarChart3, CirclePlus, Dumbbell, Flame, LogOut, Settings } from "lucide
 import type { ReactNode } from "react";
 
 import { NotificationBell } from "@/components/workout/NotificationBell";
+import { HalkuPanel } from "@/components/halku/HalkuPanel";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { TRIAL_DAYS, guestActive, guestDayNumber } from "@/lib/guest";
+import { anchorProps } from "@/lib/halku/anchors";
 
 const NAV = [
-  { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
-  { to: "/add-meal", label: "Add Meal", icon: CirclePlus },
-  { to: "/log-workout", label: "Log Workout", icon: Dumbbell },
-  { to: "/settings", label: "Settings", icon: Settings },
+  { to: "/dashboard", label: "Dashboard", icon: BarChart3, anchor: "nav.dashboard" },
+  { to: "/add-meal", label: "Add Meal", icon: CirclePlus, anchor: "nav.add-meal" },
+  { to: "/log-workout", label: "Log Workout", icon: Dumbbell, anchor: "nav.log-workout" },
+  { to: "/settings", label: "Settings", icon: Settings, anchor: "nav.settings" },
 ] as const;
 
-export function AppShell({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
+export function AppShell({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+}) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isGuest = guestActive();
@@ -34,14 +44,21 @@ export function AppShell({ title, subtitle, children }: { title: string; subtitl
           <span className="text-muted-foreground">
             Trial · day {guestDayNumber()} of {TRIAL_DAYS} — your data is only on this device.
           </span>{" "}
-          <Link to="/auth" search={{ mode: "signup" }} className="font-semibold text-primary underline">
+          <Link
+            to="/auth"
+            search={{ mode: "signup" }}
+            className="font-semibold text-primary underline"
+          >
             Create a free account to save it
           </Link>
         </div>
       ) : null}
       <header className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3 px-4 pt-6">
         <div>
-          <Link to="/dashboard" className="flex items-center gap-2 text-sm font-semibold text-primary">
+          <Link
+            to="/dashboard"
+            className="flex items-center gap-2 text-sm font-semibold text-primary"
+          >
             <Flame className="size-4" aria-hidden="true" /> MacroForge
           </Link>
           <h1 className="mt-1 text-2xl font-bold sm:text-3xl">{title}</h1>
@@ -49,10 +66,11 @@ export function AppShell({ title, subtitle, children }: { title: string; subtitl
         </div>
         <div className="flex items-center gap-2">
           <nav className="hidden gap-1 sm:flex">
-            {NAV.map(({ to, label }) => (
+            {NAV.map(({ to, label, anchor }) => (
               <Link
                 key={to}
                 to={to}
+                {...anchorProps(anchor)}
                 className="rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                 activeProps={{ className: "bg-secondary text-foreground" }}
               >
@@ -62,7 +80,9 @@ export function AppShell({ title, subtitle, children }: { title: string; subtitl
           </nav>
           {isGuest ? (
             <Button asChild size="sm">
-              <Link to="/auth" search={{ mode: "signup" }}>Sign up</Link>
+              <Link to="/auth" search={{ mode: "signup" }}>
+                Sign up
+              </Link>
             </Button>
           ) : (
             <>
@@ -79,10 +99,11 @@ export function AppShell({ title, subtitle, children }: { title: string; subtitl
 
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur sm:hidden">
         <ul className="mx-auto flex max-w-md">
-          {NAV.map(({ to, label, icon: Icon }) => (
+          {NAV.map(({ to, label, icon: Icon, anchor }) => (
             <li key={to} className="flex-1">
               <Link
                 to={to}
+                {...anchorProps(anchor)}
                 className="flex flex-col items-center gap-1 py-3 text-[11px] text-muted-foreground"
                 activeProps={{ className: "text-primary" }}
               >
@@ -93,6 +114,8 @@ export function AppShell({ title, subtitle, children }: { title: string; subtitl
           ))}
         </ul>
       </nav>
+
+      <HalkuPanel />
     </div>
   );
 }

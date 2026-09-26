@@ -50,9 +50,15 @@ jobs:
       # Scoped to the files this PR actually changed, not the whole repo —
       # this project's pre-existing repo-wide lint debt (1000+ errors) would
       # otherwise drown out the one or two lines that matter for THIS diff.
+      #
+      # No continue-on-error here (or on typecheck/build/test below): a real
+      # failure must fail this job so it shows up as a red check on the PR,
+      # not just as text in the QA comment. The steps further down that
+      # still need to run afterwards (to post a full QA report even when a
+      # check failed) use `if: ${{ !cancelled() }}` instead of relying on
+      # continue-on-error to keep going.
       - name: Lint (changed files only)
         id: lint
-        continue-on-error: true
         run: |
           if [ -s changed-lintable-files.txt ]; then
             bunx eslint $(cat changed-lintable-files.txt) 2>&1 | tee lint-output.txt
@@ -62,24 +68,24 @@ jobs:
 
       - name: Typecheck
         id: typecheck
-        continue-on-error: true
         run: bunx tsc --noEmit 2>&1 | tee typecheck-output.txt
 
       - name: Build
         id: build
-        continue-on-error: true
         run: bun run build 2>&1 | tee build-output.txt
 
       - name: Test
         id: test
-        continue-on-error: true
         run: bun run test 2>&1 | tee test-output.txt
 
       # Safety valve for an unattended repeat-fix loop: if this PR has
       # already collected 8 QA verdicts without shipping, stop spending API
-      # calls and ask for a human look instead of reviewing again.
+      # calls and ask for a human look instead of reviewing again. Runs even
+      # if an earlier check failed, so the QA comment below still reflects
+      # the real result instead of the job just stopping silently.
       - name: Count prior QA reviews on this PR
         id: guard
+        if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -89,7 +95,7 @@ jobs:
 
       - name: Run QA review (Gemini)
         id: qa
-        if: fromJSON(steps.guard.outputs.count) < 8
+        if: ${{ !cancelled() && fromJSON(steps.guard.outputs.count) < 8 }}
         env:
           QA_PROVIDER: gemini
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -105,13 +111,13 @@ jobs:
         run: node .github/scripts/qa-review.mjs
 
       - name: Post QA report to PR
-        if: fromJSON(steps.guard.outputs.count) < 8
+        if: ${{ !cancelled() && fromJSON(steps.guard.outputs.count) < 8 }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh pr comment "${{ github.event.pull_request.number }}" --body-file qa-review-output.md
 
       - name: Post iteration-limit notice
-        if: fromJSON(steps.guard.outputs.count) >= 8
+        if: ${{ !cancelled() && fromJSON(steps.guard.outputs.count) >= 8 }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

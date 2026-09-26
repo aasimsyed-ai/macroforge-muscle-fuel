@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
 import { AppShell } from "@/components/app/AppShell";
+import { SectionGuide } from "@/components/app/SectionGuide";
 import { WorkoutAccountRequired } from "@/components/workout/WorkoutAccountRequired";
 import { WorkoutLogger } from "@/components/workout/WorkoutLogger";
 import { guestActive } from "@/lib/guest";
@@ -13,7 +14,8 @@ export const Route = createFileRoute("/_authenticated/log-workout")({
       { title: "Log Workout — MacroForge" },
       {
         name: "description",
-        content: "Log exercises, sets and load — the same structured workout tracker as the Workout tab.",
+        content:
+          "Log exercises, sets and load — the same structured workout tracker as the Workout tab.",
       },
     ],
   }),
@@ -34,14 +36,24 @@ function LogWorkout() {
   }
 
   return (
-    <AppShell title="Log Workout" subtitle="Exercises, sets and load — the same tracker as the Workout tab">
+    <AppShell
+      title="Log Workout"
+      subtitle="Exercises, sets and load — the same tracker as the Workout tab"
+    >
+      <div className="mb-3 flex justify-end">
+        <SectionGuide section="workout" />
+      </div>
       {isGuest ? (
         // Tell a guest up front that workouts need an account, before they
         // spend time filling in exercises/sets that would fail at save time.
         <WorkoutAccountRequired />
       ) : (
         <div className="panel mt-2 p-4">
-          <WorkoutLogger bodyWeightKg={bodyWeightKg} onSaved={backToDashboard} onCancel={backToDashboard} />
+          <WorkoutLogger
+            bodyWeightKg={bodyWeightKg}
+            onSaved={backToDashboard}
+            onCancel={backToDashboard}
+          />
         </div>
       )}
     </AppShell>

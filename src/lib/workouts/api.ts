@@ -4,6 +4,10 @@ import type { Database, Json } from "@/integrations/supabase/types";
 import {
   calculateSessionVolume,
   calculateWorkoutCalories,
+  compareExercisePeriods,
+  summarizeExercisePeriod,
+  type ExerciseProgressComparison,
+  type ExercisePeriodStats,
   type ProgressionHistoryItem,
 } from "./calculations";
 import type {
@@ -52,28 +56,10 @@ export async function fetchExerciseCatalog(): Promise<ExerciseCatalogItem[]> {
 
 /* --------------------------------- sessions -------------------------------- */
 
-export interface SessionVolumePoint {
-  date: string;
-  volume: number;
-}
-
-/** The last few sessions' total volume, oldest first — a compact "is load trending up" signal. */
-export async function fetchRecentSessionVolumes(limit = 8): Promise<SessionVolumePoint[]> {
-  const user = await requireUser();
-  const { data, error } = await supabase
-    .from("workout_sessions")
-    .select("workout_date, total_volume")
-    .eq("user_id", user.id)
-    .order("workout_date", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  if (error) throw error;
-  return (data ?? [])
-    .map((row) => ({ date: row.workout_date, volume: Number(row.total_volume) }))
-    .reverse();
-}
-
-export async function fetchWorkoutSessions(fromDate: string, toDate: string): Promise<SessionRow[]> {
+export async function fetchWorkoutSessions(
+  fromDate: string,
+  toDate: string,
+): Promise<SessionRow[]> {
   const user = await requireUser();
   const { data, error } = await supabase
     .from("workout_sessions")
@@ -174,6 +160,11 @@ export async function createWorkoutSession(
     })),
   }));
 
+  // The generated RPC Args type marks every param as required/non-null —
+  // the actual Postgres function accepts null for the optional ones (it has
+  // SQL-side defaults); the type generator just doesn't reflect that. Cast
+  // at the call site only, same as the existing p_exercises cast just below,
+  // rather than touching the generated types file or the DB function itself.
   const { data, error } = await supabase.rpc("create_workout_session", {
     p_workout_date: draft.workoutDate,
     p_duration_minutes: draft.durationMinutes,
@@ -189,7 +180,7 @@ export async function createWorkoutSession(
     p_total_volume: totalVolume,
     p_notes: draft.notes || null,
     p_exercises: exercises as unknown as Json,
-  });
+  } as unknown as Database["public"]["Functions"]["create_workout_session"]["Args"]);
 
   if (error) throw error;
   if (!data) throw new Error("The workout could not be saved. Please try again.");
@@ -242,7 +233,9 @@ export interface RecentWorkoutSessionSummary {
 }
 
 /** Recent sessions for the "copy from a previous workout" picker. */
-export async function fetchRecentWorkoutSessions(limit = 10): Promise<RecentWorkoutSessionSummary[]> {
+export async function fetchRecentWorkoutSessions(
+  limit = 10,
+): Promise<RecentWorkoutSessionSummary[]> {
   const user = await requireUser();
   const { data: sessions, error } = await supabase
     .from("workout_sessions")
@@ -279,7 +272,9 @@ export async function fetchRecentWorkoutSessions(limit = 10): Promise<RecentWork
 }
 
 /** Turn a saved session's exercises/sets back into editable drafts, so the user only needs to update weights. */
-export function sessionDetailToExerciseDrafts(detail: WorkoutSessionDetail): WorkoutExerciseDraft[] {
+export function sessionDetailToExerciseDrafts(
+  detail: WorkoutSessionDetail,
+): WorkoutExerciseDraft[] {
   return detail.exercises.map((exercise) => ({
     muscleGroup: exercise.muscle_group,
     exerciseName: exercise.exercise_name,
@@ -429,7 +424,9 @@ export async function fetchWorkoutStats(
     }
   }
 
-  const muscleGroups = [...new Set(exercises.map((row) => row.muscle_group).filter(Boolean))].sort();
+  const muscleGroups = [
+    ...new Set(exercises.map((row) => row.muscle_group).filter(Boolean)),
+  ].sort();
 
   return {
     sessions,
@@ -444,6 +441,139 @@ export async function fetchWorkoutStats(
       : null,
     calories: { value: Math.round(calorieTotal), anyWearable, anyEstimated },
   };
+}
+
+export interface ExerciseProgressRow {
+  muscleGroup: string;
+  exerciseName: string;
+  current: ExercisePeriodStats;
+  previous: ExercisePeriodStats;
+  comparison: ExerciseProgressComparison;
+}
+
+/**
+ * Per-exercise progressive-overload comparison between two adjacent date
+ * windows (e.g. this week vs last week). Three plain queries regardless of
+ * how many exercises are involved — sessions in the combined range, their
+ * exercises, then those exercises' sets — bucketed and grouped in JS, the
+ * same shape as `fetchWorkoutStats`/`fetchExerciseHistory` above. Every
+ * exercise is compared only against its own prior period; nothing here
+ * looks at, or can suppress, any other exercise's result.
+ */
+export async function fetchExerciseProgressBoard(
+  currentFrom: string,
+  currentTo: string,
+  previousFrom: string,
+  previousTo: string,
+): Promise<ExerciseProgressRow[]> {
+  const user = await requireUser();
+
+  const { data: sessionRows, error: sessionError } = await supabase
+    .from("workout_sessions")
+    .select("id, workout_date")
+    .eq("user_id", user.id)
+    .gte("workout_date", previousFrom)
+    .lte("workout_date", currentTo);
+  if (sessionError) throw sessionError;
+
+  const sessions = sessionRows ?? [];
+  if (sessions.length === 0) return [];
+
+  const windowBySession = new Map<string, "current" | "previous" | null>(
+    sessions.map((session) => {
+      const bucket: "current" | "previous" | null =
+        session.workout_date >= currentFrom && session.workout_date <= currentTo
+          ? "current"
+          : session.workout_date >= previousFrom && session.workout_date <= previousTo
+            ? "previous"
+            : null;
+      return [session.id, bucket] as const;
+    }),
+  );
+
+  const { data: exerciseRows, error: exerciseError } = await supabase
+    .from("workout_exercises")
+    .select("id, session_id, muscle_group, exercise_name")
+    .eq("user_id", user.id)
+    .in(
+      "session_id",
+      sessions.map((session) => session.id),
+    );
+  if (exerciseError) throw exerciseError;
+
+  const exercises = exerciseRows ?? [];
+  if (exercises.length === 0) return [];
+
+  const { data: setRows, error: setError } = await supabase
+    .from("workout_sets")
+    .select("workout_exercise_id, reps, weight_kg, weight_mode, completed")
+    .in(
+      "workout_exercise_id",
+      exercises.map((exercise) => exercise.id),
+    );
+  if (setError) throw setError;
+
+  type MiniSet = {
+    reps: number;
+    weightKg: number | null;
+    weightMode: WeightMode;
+    completed: boolean;
+  };
+  const setsByExercise = new Map<string, MiniSet[]>();
+  for (const row of setRows ?? []) {
+    const list = setsByExercise.get(row.workout_exercise_id) ?? [];
+    list.push({
+      reps: row.reps,
+      weightKg: row.weight_kg !== null ? Number(row.weight_kg) : null,
+      weightMode: row.weight_mode as WeightMode,
+      completed: row.completed,
+    });
+    setsByExercise.set(row.workout_exercise_id, list);
+  }
+
+  const groups = new Map<
+    string,
+    { muscleGroup: string; exerciseName: string; currentSets: MiniSet[]; previousSets: MiniSet[] }
+  >();
+  for (const exercise of exercises) {
+    const bucket = windowBySession.get(exercise.session_id);
+    if (!bucket) continue;
+    const key = `${exercise.muscle_group}::${exercise.exercise_name.trim().toLowerCase()}`;
+    const group = groups.get(key) ?? {
+      muscleGroup: exercise.muscle_group,
+      exerciseName: exercise.exercise_name,
+      currentSets: [],
+      previousSets: [],
+    };
+    const sets = setsByExercise.get(exercise.id) ?? [];
+    if (bucket === "current") group.currentSets.push(...sets);
+    else group.previousSets.push(...sets);
+    groups.set(key, group);
+  }
+
+  const rows: ExerciseProgressRow[] = [];
+  for (const group of groups.values()) {
+    const current = summarizeExercisePeriod(group.currentSets);
+    const previous = summarizeExercisePeriod(group.previousSets);
+    rows.push({
+      muscleGroup: group.muscleGroup,
+      exerciseName: group.exerciseName,
+      current,
+      previous,
+      comparison: compareExercisePeriods(current, previous),
+    });
+  }
+
+  // Exercises actually trained in the current window first (most relevant to
+  // "what changed"), then alphabetically by muscle group and name.
+  rows.sort((a, b) => {
+    if (a.current.completedSets === 0 && b.current.completedSets > 0) return 1;
+    if (b.current.completedSets === 0 && a.current.completedSets > 0) return -1;
+    if (a.muscleGroup !== b.muscleGroup) return a.muscleGroup.localeCompare(b.muscleGroup);
+    return a.exerciseName.localeCompare(b.exerciseName);
+  });
+
+  return rows;
 }
 
 /* --------------------------- training preferences ------------------------- */
@@ -532,7 +662,9 @@ function dominantWeight(
   return best;
 }
 
-export async function fetchExerciseHistory(exerciseName: string): Promise<ProgressionHistoryItem[]> {
+export async function fetchExerciseHistory(
+  exerciseName: string,
+): Promise<ProgressionHistoryItem[]> {
   const user = await requireUser();
   const name = exerciseName.trim();
   if (!name) return [];
@@ -563,9 +695,7 @@ export async function fetchExerciseHistory(exerciseName: string): Promise<Progre
   const dateBySession = new Map(
     (sessionResult.data ?? []).map((row) => [row.id, row.workout_date] as const),
   );
-  const sessionByExercise = new Map(
-    exercises.map((row) => [row.id, row.session_id] as const),
-  );
+  const sessionByExercise = new Map(exercises.map((row) => [row.id, row.session_id] as const));
 
   type MiniSet = { reps: number; weightKg: number | null; completed: boolean; rir: number | null };
   const setsBySession = new Map<string, MiniSet[]>();
@@ -589,17 +719,25 @@ export async function fetchExerciseHistory(exerciseName: string): Promise<Progre
 
     const completedSets = sets.filter((set) => set.completed).length;
     const totalSets = sets.length;
-    const maxReps = sets.reduce((max, set) => (set.completed && set.reps > max ? set.reps : max), 0);
+    const maxReps = sets.reduce(
+      (max, set) => (set.completed && set.reps > max ? set.reps : max),
+      0,
+    );
     const totalVolume = sets.reduce(
       (sum, set) =>
-        sum + (set.completed && set.weightKg && Number.isFinite(set.weightKg) ? set.reps * set.weightKg : 0),
+        sum +
+        (set.completed && set.weightKg && Number.isFinite(set.weightKg)
+          ? set.reps * set.weightKg
+          : 0),
       0,
     );
     const rirValues = sets
       .map((set) => set.rir)
       .filter((value): value is number => value !== null && Number.isFinite(value));
     const averageRir =
-      rirValues.length > 0 ? rirValues.reduce((sum, value) => sum + value, 0) / rirValues.length : null;
+      rirValues.length > 0
+        ? rirValues.reduce((sum, value) => sum + value, 0) / rirValues.length
+        : null;
 
     items.push({
       sessionDate,
@@ -617,23 +755,41 @@ export async function fetchExerciseHistory(exerciseName: string): Promise<Progre
   );
 }
 
-/** Distinct exercise names the user has logged, most recent first. */
-export async function fetchRecentExerciseNames(limit = 12): Promise<string[]> {
+export interface RecentExerciseName {
+  name: string;
+  muscleGroup: string;
+  equipment: string | null;
+  exerciseVariant: string | null;
+}
+
+/**
+ * Distinct exercises the user has logged before, most recent first — this is
+ * how a name typed under "Other" becomes available again later: the catalog
+ * table itself is shared/read-only (regular users can't write to it), so
+ * reuse comes from the user's own workout history instead, scoped by RLS to
+ * `auth.uid()` like every other query here.
+ */
+export async function fetchRecentExerciseNames(limit = 40): Promise<RecentExerciseName[]> {
   const user = await requireUser();
   const { data, error } = await supabase
     .from("workout_exercises")
-    .select("exercise_name, created_at")
+    .select("exercise_name, muscle_group, equipment, exercise_variant, created_at")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
-    .limit(200);
+    .limit(300);
   if (error) throw error;
   const seen = new Set<string>();
-  const names: string[] = [];
+  const names: RecentExerciseName[] = [];
   for (const row of data ?? []) {
     const key = row.exercise_name.trim().toLowerCase();
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    names.push(row.exercise_name);
+    names.push({
+      name: row.exercise_name,
+      muscleGroup: row.muscle_group,
+      equipment: row.equipment,
+      exerciseVariant: row.exercise_variant,
+    });
     if (names.length >= limit) break;
   }
   return names;

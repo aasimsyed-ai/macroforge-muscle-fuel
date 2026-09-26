@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useId } from "react";
 import { format } from "date-fns";
 import { AlertCircle, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -21,6 +21,7 @@ import { INTENSITIES } from "@/lib/workouts/constants";
 import {
   useCreateWorkout,
   useExerciseCatalog,
+  useRecentExerciseNames,
   useRecentWorkoutSessions,
   useReplaceWorkout,
   useTrainingPreferences,
@@ -30,6 +31,7 @@ import type {
   WorkoutIntensity,
   WorkoutSessionDraft,
 } from "@/lib/workouts/types";
+import { anchorProps } from "@/lib/halku/anchors";
 import { validateWorkoutDraft } from "@/lib/workouts/validation";
 
 import { WorkoutExerciseForm, newExerciseDraft } from "./WorkoutExerciseForm";
@@ -70,12 +72,15 @@ export function WorkoutLogger({
 }) {
   const isEditing = !!initialData;
   const catalog = useExerciseCatalog();
+  const recentExerciseNames = useRecentExerciseNames();
   const preferences = useTrainingPreferences();
   const recentSessions = useRecentWorkoutSessions();
   const create = useCreateWorkout();
   const replace = useReplaceWorkout();
 
-  const [draft, setDraft] = useState<WorkoutSessionDraft>(() => initialData?.draft ?? initialDraft());
+  const [draft, setDraft] = useState<WorkoutSessionDraft>(
+    () => initialData?.draft ?? initialDraft(),
+  );
   const [errors, setErrors] = useState<string[]>([]);
   const [showWearable, setShowWearable] = useState(
     () =>
@@ -85,10 +90,21 @@ export function WorkoutLogger({
         initialData?.draft.maxHeartRate != null),
   );
   const [copyingSessionId, setCopyingSessionId] = useState<string | null>(null);
-  // Bumped whenever `draft.exercises` is replaced wholesale (copy-from-previous,
-  // post-save reset) so exercise/set rows remount and drop stale local UI state
-  // (e.g. a weight input's "custom vs preset" toggle) instead of reusing it by index.
-  const [draftVersion, setDraftVersion] = useState(0);
+  // Stable per-exercise React keys, independent of array position. Without
+  // this, removing exercise N shifts every later exercise's index-based key,
+  // remounting them and silently resetting their collapse/expanded-set UI
+  // state (not their data — that lives in `draft`, untouched) even though
+  // nothing about those exercises actually changed. Replacing `draft.exercises`
+  // wholesale (copy-from-previous, post-save reset) regenerates every key too,
+  // so those rows still remount and drop stale local UI state on purpose (e.g.
+  // a weight input's "custom vs preset" toggle).
+  // Unique per form instance: the dashboard can show the new-workout form and an
+  // edit-workout form together, and shared ids made labels focus the wrong field.
+  const formId = useId();
+  const nextExerciseKey = useRef(1);
+  const [exerciseKeys, setExerciseKeys] = useState<number[]>(() =>
+    draft.exercises.map(() => nextExerciseKey.current++),
+  );
   // Editing a saved session already has its own training phase — don't let the
   // "apply my default phase" effect below silently overwrite it.
   const phaseTouched = useRef(isEditing);
@@ -131,6 +147,7 @@ export function WorkoutLogger({
 
   function addExercise() {
     setDraft((current) => ({ ...current, exercises: [...current.exercises, newExerciseDraft()] }));
+    setExerciseKeys((current) => [...current, nextExerciseKey.current++]);
   }
 
   async function copyFromSession(sessionId: string) {
@@ -144,7 +161,7 @@ export function WorkoutLogger({
       }
       const exercises = workoutApi.sessionDetailToExerciseDrafts(detail);
       setDraft((current) => ({ ...current, exercises }));
-      setDraftVersion((v) => v + 1);
+      setExerciseKeys(exercises.map(() => nextExerciseKey.current++));
       toast.success("Loaded — update the weights and save.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not load that workout.");
@@ -161,6 +178,9 @@ export function WorkoutLogger({
           ? current.exercises.filter((_, i) => i !== index)
           : current.exercises,
     }));
+    setExerciseKeys((current) =>
+      current.length > 1 ? current.filter((_, i) => i !== index) : current,
+    );
   }
 
   async function submit(event: React.FormEvent) {
@@ -177,18 +197,26 @@ export function WorkoutLogger({
     submittingRef.current = true;
     try {
       if (isEditing && initialData) {
-        const result = await replace.mutateAsync({ oldId: initialData.sessionId, draft, bodyWeightKg });
+        const result = await replace.mutateAsync({
+          oldId: initialData.sessionId,
+          draft,
+          bodyWeightKg,
+        });
         if (result.oldSessionRemoved) {
           toast.success("Workout updated");
         } else {
-          toast.warning("Workout updated, but the old entry couldn't be removed. Please check Workout History.");
+          toast.warning(
+            "Workout updated, but the old entry couldn't be removed. Please check Workout History.",
+          );
         }
       } else {
         await create.mutateAsync({ draft, bodyWeightKg });
         const moved = Math.round(totalVolume);
-        toast.success(moved > 0 ? `Workout logged ✓ · ${moved.toLocaleString()} kg moved` : "Workout logged ✓");
+        toast.success(
+          moved > 0 ? `Workout logged ✓ · ${moved.toLocaleString()} kg moved` : "Workout logged ✓",
+        );
         setDraft(initialDraft());
-        setDraftVersion((v) => v + 1);
+        setExerciseKeys([nextExerciseKey.current++]);
         phaseTouched.current = false;
       }
       playSaveTone();
@@ -211,22 +239,22 @@ export function WorkoutLogger({
     <form onSubmit={submit} className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
-          <Label htmlFor="workout-date" className="text-xs">
+          <Label htmlFor={`${formId}-workout-date`} className="text-xs">
             Date
           </Label>
           <Input
-            id="workout-date"
+            id={`${formId}-workout-date`}
             type="date"
             value={draft.workoutDate}
             onChange={(event) => setDraft((c) => ({ ...c, workoutDate: event.target.value }))}
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="workout-phase" className="text-xs">
+          <Label htmlFor={`${formId}-workout-phase`} className="text-xs">
             Training phase
           </Label>
           <TrainingPhaseSelect
-            id="workout-phase"
+            id={`${formId}-workout-phase`}
             value={draft.trainingPhase}
             onChange={(value) => {
               phaseTouched.current = true;
@@ -235,7 +263,7 @@ export function WorkoutLogger({
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="workout-intensity" className="text-xs">
+          <Label htmlFor={`${formId}-workout-intensity`} className="text-xs">
             Intensity
           </Label>
           <Select
@@ -244,7 +272,7 @@ export function WorkoutLogger({
               setDraft((c) => ({ ...c, intensity: value as WorkoutIntensity }))
             }
           >
-            <SelectTrigger id="workout-intensity">
+            <SelectTrigger id={`${formId}-workout-intensity`}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -257,11 +285,11 @@ export function WorkoutLogger({
           </Select>
         </div>
         <div className="space-y-1">
-          <Label htmlFor="workout-duration" className="text-xs">
+          <Label htmlFor={`${formId}-workout-duration`} className="text-xs">
             Duration (minutes)
           </Label>
           <Input
-            id="workout-duration"
+            id={`${formId}-workout-duration`}
             type="number"
             inputMode="numeric"
             min={0}
@@ -277,7 +305,7 @@ export function WorkoutLogger({
 
       {!isEditing && recentSessions.data && recentSessions.data.length > 0 ? (
         <div className="space-y-1 rounded-lg border border-dashed border-border p-3">
-          <Label htmlFor="copy-previous-workout" className="text-xs">
+          <Label htmlFor={`${formId}-copy-previous-workout`} className="text-xs">
             Copy from a previous workout
           </Label>
           <Select
@@ -285,7 +313,10 @@ export function WorkoutLogger({
             disabled={copyingSessionId !== null}
             onValueChange={(value) => void copyFromSession(value)}
           >
-            <SelectTrigger id="copy-previous-workout">
+            <SelectTrigger
+              id={`${formId}-copy-previous-workout`}
+              {...anchorProps("workout.copy-previous")}
+            >
               <SelectValue
                 placeholder={
                   copyingSessionId ? "Loading…" : "Select a past workout to reuse its exercises"
@@ -322,16 +353,24 @@ export function WorkoutLogger({
         </div>
         {draft.exercises.map((exercise, index) => (
           <WorkoutExerciseForm
-            key={`${draftVersion}-${index}`}
+            key={exerciseKeys[index] ?? index}
             index={index}
             exercise={exercise}
             catalog={catalog.data ?? []}
+            recentExerciseNames={recentExerciseNames.data ?? []}
+            workoutDate={draft.workoutDate}
             canRemove={draft.exercises.length > 1}
             onChange={(patch) => patchExercise(index, patch)}
             onRemove={() => removeExercise(index)}
           />
         ))}
-        <Button type="button" variant="secondary" size="sm" onClick={addExercise}>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={addExercise}
+          {...anchorProps("workout.add-exercise")}
+        >
           <Plus className="size-4" /> Add exercise
         </Button>
       </div>
@@ -355,27 +394,30 @@ export function WorkoutLogger({
             </p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               <div className="space-y-1">
-                <Label htmlFor="avg-hr" className="text-[11px]">
+                <Label htmlFor={`${formId}-avg-hr`} className="text-[11px]">
                   Avg HR
                 </Label>
                 <Input
-                  id="avg-hr"
+                  id={`${formId}-avg-hr`}
                   type="number"
                   inputMode="numeric"
                   min={30}
                   max={240}
                   value={draft.averageHeartRate === null ? "" : String(draft.averageHeartRate)}
                   onChange={(event) =>
-                    setDraft((c) => ({ ...c, averageHeartRate: toNumberOrNull(event.target.value) }))
+                    setDraft((c) => ({
+                      ...c,
+                      averageHeartRate: toNumberOrNull(event.target.value),
+                    }))
                   }
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="max-hr" className="text-[11px]">
+                <Label htmlFor={`${formId}-max-hr`} className="text-[11px]">
                   Max HR
                 </Label>
                 <Input
-                  id="max-hr"
+                  id={`${formId}-max-hr`}
                   type="number"
                   inputMode="numeric"
                   min={30}
@@ -387,11 +429,11 @@ export function WorkoutLogger({
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="wearable-cal" className="text-[11px]">
+                <Label htmlFor={`${formId}-wearable-cal`} className="text-[11px]">
                   Wearable kcal
                 </Label>
                 <Input
-                  id="wearable-cal"
+                  id={`${formId}-wearable-cal`}
                   type="number"
                   inputMode="numeric"
                   min={0}
@@ -414,11 +456,11 @@ export function WorkoutLogger({
       </div>
 
       <div className="space-y-1">
-        <Label htmlFor="workout-notes" className="text-xs">
+        <Label htmlFor={`${formId}-workout-notes`} className="text-xs">
           Notes
         </Label>
         <Textarea
-          id="workout-notes"
+          id={`${formId}-workout-notes`}
           rows={2}
           placeholder="How it felt, what to change next time…"
           value={draft.notes}
@@ -427,9 +469,6 @@ export function WorkoutLogger({
       </div>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-secondary px-3 py-2 text-xs">
-        <span>
-          External-load volume: <strong>{Math.round(totalVolume).toLocaleString()} kg</strong>
-        </span>
         <span>
           Calories:{" "}
           <strong>
@@ -464,7 +503,7 @@ export function WorkoutLogger({
             Cancel
           </Button>
         ) : null}
-        <Button type="submit" className="flex-1" disabled={saving}>
+        <Button type="submit" className="flex-1" disabled={saving} {...anchorProps("workout.save")}>
           {saving ? "Saving…" : isEditing ? "Save changes" : "Save workout"}
         </Button>
       </div>

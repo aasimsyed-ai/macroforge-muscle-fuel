@@ -160,7 +160,6 @@ export function WorkoutHistory({
                       <Badge variant="outline">{session.training_phase.replace(/_/g, " ")}</Badge>
                     ) : null}
                     {session.duration_minutes ? <span>{session.duration_minutes} min</span> : null}
-                    <span>{Math.round(Number(session.total_volume)).toLocaleString()} kg volume</span>
                     <span>{sessionCalories(session)}</span>
                   </p>
                 </div>
