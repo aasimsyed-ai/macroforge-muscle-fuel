@@ -4,6 +4,7 @@ import { HelpCircle, Minus, TrendingDown, TrendingUp } from "lucide-react";
 import { ProgressRing } from "@/components/app/ProgressRing";
 import { SectionGuide } from "@/components/app/SectionGuide";
 import { Badge } from "@/components/ui/badge";
+import { anchorProps } from "@/lib/halku/anchors";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   resolveProgressBoardWindow,
@@ -68,7 +69,7 @@ export function WorkoutProgressBoard() {
     filter === "all" ? rows : rows.filter((row) => row.comparison.status === filter);
 
   return (
-    <div className="panel p-4">
+    <div className="panel p-4" {...anchorProps("progress.board")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1">
           <div>

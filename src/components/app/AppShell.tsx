@@ -8,12 +8,13 @@ import { HalkuPanel } from "@/components/halku/HalkuPanel";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { TRIAL_DAYS, guestActive, guestDayNumber } from "@/lib/guest";
+import { anchorProps } from "@/lib/halku/anchors";
 
 const NAV = [
-  { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
-  { to: "/add-meal", label: "Add Meal", icon: CirclePlus },
-  { to: "/log-workout", label: "Log Workout", icon: Dumbbell },
-  { to: "/settings", label: "Settings", icon: Settings },
+  { to: "/dashboard", label: "Dashboard", icon: BarChart3, anchor: "nav.dashboard" },
+  { to: "/add-meal", label: "Add Meal", icon: CirclePlus, anchor: "nav.add-meal" },
+  { to: "/log-workout", label: "Log Workout", icon: Dumbbell, anchor: "nav.log-workout" },
+  { to: "/settings", label: "Settings", icon: Settings, anchor: "nav.settings" },
 ] as const;
 
 export function AppShell({
@@ -65,10 +66,11 @@ export function AppShell({
         </div>
         <div className="flex items-center gap-2">
           <nav className="hidden gap-1 sm:flex">
-            {NAV.map(({ to, label }) => (
+            {NAV.map(({ to, label, anchor }) => (
               <Link
                 key={to}
                 to={to}
+                {...anchorProps(anchor)}
                 className="rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                 activeProps={{ className: "bg-secondary text-foreground" }}
               >
@@ -97,10 +99,11 @@ export function AppShell({
 
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur sm:hidden">
         <ul className="mx-auto flex max-w-md">
-          {NAV.map(({ to, label, icon: Icon }) => (
+          {NAV.map(({ to, label, icon: Icon, anchor }) => (
             <li key={to} className="flex-1">
               <Link
                 to={to}
+                {...anchorProps(anchor)}
                 className="flex flex-col items-center gap-1 py-3 text-[11px] text-muted-foreground"
                 activeProps={{ className: "text-primary" }}
               >

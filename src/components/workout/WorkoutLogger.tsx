@@ -31,6 +31,7 @@ import type {
   WorkoutIntensity,
   WorkoutSessionDraft,
 } from "@/lib/workouts/types";
+import { anchorProps } from "@/lib/halku/anchors";
 import { validateWorkoutDraft } from "@/lib/workouts/validation";
 
 import { WorkoutExerciseForm, newExerciseDraft } from "./WorkoutExerciseForm";
@@ -312,7 +313,10 @@ export function WorkoutLogger({
             disabled={copyingSessionId !== null}
             onValueChange={(value) => void copyFromSession(value)}
           >
-            <SelectTrigger id={`${formId}-copy-previous-workout`}>
+            <SelectTrigger
+              id={`${formId}-copy-previous-workout`}
+              {...anchorProps("workout.copy-previous")}
+            >
               <SelectValue
                 placeholder={
                   copyingSessionId ? "Loading…" : "Select a past workout to reuse its exercises"
@@ -354,12 +358,19 @@ export function WorkoutLogger({
             exercise={exercise}
             catalog={catalog.data ?? []}
             recentExerciseNames={recentExerciseNames.data ?? []}
+            workoutDate={draft.workoutDate}
             canRemove={draft.exercises.length > 1}
             onChange={(patch) => patchExercise(index, patch)}
             onRemove={() => removeExercise(index)}
           />
         ))}
-        <Button type="button" variant="secondary" size="sm" onClick={addExercise}>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={addExercise}
+          {...anchorProps("workout.add-exercise")}
+        >
           <Plus className="size-4" /> Add exercise
         </Button>
       </div>
@@ -492,7 +503,7 @@ export function WorkoutLogger({
             Cancel
           </Button>
         ) : null}
-        <Button type="submit" className="flex-1" disabled={saving}>
+        <Button type="submit" className="flex-1" disabled={saving} {...anchorProps("workout.save")}>
           {saving ? "Saving…" : isEditing ? "Save changes" : "Save workout"}
         </Button>
       </div>

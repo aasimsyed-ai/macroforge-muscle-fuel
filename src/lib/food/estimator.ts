@@ -223,7 +223,7 @@ function unmatchedItem(phrase: string): EstimatedItem {
       {
         code: "no_nutrition_data",
         severity: "warn",
-        message: `No nutrition data found for “${label}” — it isn’t counted. Enter its numbers, or reword it (for example “100 g cucumber”).`,
+        message: `No nutrition data found for “${label}” — it isn’t counted. Enter its numbers, or reword it (for example “100 g paneer”).`,
       },
     ],
   };
@@ -444,14 +444,10 @@ export function assembleEstimate(
   if (totalFlags.length > 0) confidence *= 0.4;
   confidence = Math.round(Math.min(confidence, options.confidenceCap ?? 0.85) * 100) / 100;
 
-  const hasErrors = items.some((i) => i.flags?.some((f) => f.severity === "error"));
+  // Any flag at all (missing data, failed sanity check, unmodelled preparation,
+  // ambiguous reading, implausible portion) means a person should look.
   const needsReview =
-    uncounted.length > 0 ||
-    hasErrors ||
-    totalFlags.length > 0 ||
-    items.some((i) =>
-      i.flags?.some((f) => f.code === "preparation_not_modelled" || f.code === "compound_reading"),
-    );
+    uncounted.length > 0 || totalFlags.length > 0 || items.some((i) => (i.flags?.length ?? 0) > 0);
 
   const source: EstimateSource =
     options.source ??
@@ -496,6 +492,8 @@ export function estimateFromText(
   const text = description.trim();
   if (!text) return null;
   const phrases = splitItems(text);
+  // Only separators ("+", ",") — nothing to estimate, so don't invent an empty result.
+  if (phrases.length === 0) return null;
   const isOnlyPhrase = phrases.length <= 1;
   const items = phrases.flatMap((phrase) => estimatePhrase(phrase, sharedGrams, isOnlyPhrase));
   return assembleEstimate(items);

@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { anchorProps } from "@/lib/halku/anchors";
 import type { RecentExerciseName } from "@/lib/workouts/api";
 import {
   getEquipmentOptionsFor,
@@ -33,6 +34,7 @@ import type {
 } from "@/lib/workouts/types";
 import { cn } from "@/lib/utils";
 
+import { PreviousPerformanceHint } from "./PreviousPerformanceHint";
 import { WorkoutSetEditor } from "./WorkoutSetEditor";
 
 function makeSet(
@@ -75,6 +77,7 @@ export function WorkoutExerciseForm({
   index,
   catalog,
   recentExerciseNames,
+  workoutDate,
   onChange,
   onRemove,
   canRemove,
@@ -82,6 +85,8 @@ export function WorkoutExerciseForm({
   exercise: WorkoutExerciseDraft;
   index: number;
   catalog: ExerciseCatalogItem[];
+  /** yyyy-MM-dd of the workout being logged — "last time" means before this date. */
+  workoutDate: string;
   /** The user's own recently-logged exercises — how a name typed under "Other"
    * becomes available again later, since the shared catalog table is read-only. */
   recentExerciseNames: RecentExerciseName[];
@@ -235,6 +240,13 @@ export function WorkoutExerciseForm({
     const nextIndex = exercise.sets.length;
     onChange({ sets: [...exercise.sets, makeSet(nextIndex + 1, exercise.isBodyweight, last)] });
     setExpandedSetIndex(nextIndex);
+  }
+
+  // Fills only sets that have no weight yet — never overwrites a weight the user set.
+  function reuseWeight(weightKg: number) {
+    onChange({
+      sets: exercise.sets.map((set) => (set.weightKg === null ? { ...set, weightKg } : set)),
+    });
   }
 
   function removeSet(setIndex: number) {
@@ -492,6 +504,14 @@ export function WorkoutExerciseForm({
             </div>
           </div>
 
+          <PreviousPerformanceHint
+            exerciseName={exercise.exerciseName}
+            beforeDate={workoutDate}
+            isBodyweight={exercise.isBodyweight}
+            canReuseWeight={exercise.sets.some((set) => set.weightKg === null)}
+            onReuseWeight={reuseWeight}
+          />
+
           <div className="space-y-2">
             {exercise.sets.map((set, setIndex) =>
               setIndex === expandedSetIndex ? (
@@ -525,7 +545,13 @@ export function WorkoutExerciseForm({
             )}
           </div>
 
-          <Button type="button" variant="secondary" size="sm" onClick={addSet}>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={addSet}
+            {...anchorProps("workout.add-set")}
+          >
             <Plus className="size-4" /> Add set
           </Button>
         </>

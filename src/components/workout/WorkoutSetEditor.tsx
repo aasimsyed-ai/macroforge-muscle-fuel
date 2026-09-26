@@ -57,6 +57,11 @@ export function WorkoutSetEditor({
     () => !isBodyweight && set.weightKg !== null && !isPresetWeight(set.weightKg),
   );
   const idPrefix = `${exerciseIndex}-${set.setNumber}`;
+  // A weight that isn't on the preset ladder (e.g. a value filled in from
+  // "last time") must show in the number field — the preset Select has no
+  // matching item and would render blank.
+  const hasCustomValue = !isBodyweight && set.weightKg !== null && !isPresetWeight(set.weightKg);
+  const showWeightInput = isBodyweight || customWeight || hasCustomValue;
 
   return (
     <div className="rounded-lg border border-border bg-background/40 p-3">
@@ -98,7 +103,7 @@ export function WorkoutSetEditor({
           <Label htmlFor={`weight-${idPrefix}`} className="text-[11px]">
             {isBodyweight ? "Added weight (kg, optional)" : "Weight (kg)"}
           </Label>
-          {isBodyweight || customWeight ? (
+          {showWeightInput ? (
             <Input
               id={`weight-${idPrefix}`}
               type="number"
@@ -133,7 +138,7 @@ export function WorkoutSetEditor({
               </SelectContent>
             </Select>
           )}
-          {!isBodyweight && customWeight ? (
+          {!isBodyweight && customWeight && !hasCustomValue ? (
             <button
               type="button"
               className="text-[11px] text-muted-foreground underline"

@@ -51,11 +51,23 @@ is visible — that interaction (does closing the dialog feel abrupt? does
 Halku's character travel across the screen, or just the spotlight?) is
 exactly the part worth designing deliberately rather than guessing at here.
 
-## What's actually different in the repo after this task
+## What exists in the repo today
 
 - `HalkuAvatar.tsx` exports `HalkuGuidanceState` (a plain type, no runtime
   behavior) and `HalkuAvatar` accepts (but does not yet use) an `interactive`
   prop for its own hover/idle motion — unrelated to guidance, but the same
   file, so noted here for anyone reading it top to bottom.
-- Nothing else. No anchors, no spotlight component, no navigation handoff
-  exist yet — this file is the plan, not the implementation.
+- **Anchors (piece 1) are in place.** `src/lib/halku/anchors.ts` is the
+  registry (`nav.*`, `food.*`, `workout.*`, `progress.*`), `anchorProps(id)`
+  puts `data-halku-anchor` on the real controls (nav tabs, food name / voice /
+  scan / estimate / save, workout copy-previous / add exercise / add set /
+  save, the progress board), and `findAnchorElement(id)` returns the visible
+  element or null. A test keeps the registry and the attributes in the source
+  in lock-step.
+- **The answer seam exists.** `HalkuAnswer.anchor` (optional) is set by the
+  how-to answers for adding a set, scanning a barcode and saving a meal, and by
+  topics with a single control. Nothing reads it yet.
+- Still not built: the spotlight component (piece 2), the navigation handoff
+  and `guiding` avatar state (piece 4). With the seams above, "Show me how to
+  add a set" only needs those two pieces — no change to the answers, the
+  controls or the registry.

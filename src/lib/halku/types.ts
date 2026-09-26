@@ -1,3 +1,5 @@
+import type { HalkuAnchorId } from "./anchors";
+
 export type HalkuGender = "masculine" | "feminine";
 
 export interface HalkuMessage {
@@ -16,6 +18,8 @@ export interface HalkuMessage {
 export interface HalkuAnswer {
   text: string;
   grounded: boolean;
+  /** The on-screen control the answer is about, for a future "show me" Guided Mode. Not rendered yet. */
+  anchor?: HalkuAnchorId;
 }
 
 /** Real, already-fetched data Halku may ground an answer in. Never fetched or

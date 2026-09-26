@@ -1,3 +1,4 @@
+import type { HalkuAnchorId } from "./anchors";
 import type { HalkuActionTarget } from "./respond";
 
 /**
@@ -13,6 +14,8 @@ export interface HalkuTopic {
   triggers: readonly string[];
   text: string;
   actionTarget?: HalkuActionTarget;
+  /** The control this topic is about — a seam for a future "show me" Guided Mode; unused today. */
+  anchor?: HalkuAnchorId;
 }
 
 export const HALKU_TOPICS: readonly HalkuTopic[] = [
@@ -28,6 +31,7 @@ export const HALKU_TOPICS: readonly HalkuTopic[] = [
       "track a workout",
     ],
     actionTarget: "workout",
+    anchor: "nav.log-workout",
     text: [
       "### How to log a workout",
       "1. Open **Log Workout** (you'll need an account — guests can only track food).",
@@ -52,6 +56,7 @@ export const HALKU_TOPICS: readonly HalkuTopic[] = [
       "track my food",
     ],
     actionTarget: "food",
+    anchor: "nav.add-meal",
     text: [
       "### How to add a meal",
       "1. Open **Add Meal**.",
@@ -103,6 +108,7 @@ export const HALKU_TOPICS: readonly HalkuTopic[] = [
       "custom exercise",
       "own exercise",
     ],
+    anchor: "workout.add-exercise",
     text: [
       "### How to add an exercise",
       "1. In **Log Workout**, tap **Add exercise**.",
@@ -143,6 +149,7 @@ export const HALKU_TOPICS: readonly HalkuTopic[] = [
       "change my daily target",
     ],
     actionTarget: "goal",
+    anchor: "nav.settings",
     text: [
       "### How to change your targets",
       "1. Open **Settings**.",
@@ -153,6 +160,7 @@ export const HALKU_TOPICS: readonly HalkuTopic[] = [
   {
     id: "voice",
     triggers: ["voice", "microphone", " mic ", "speak my food", "say what i ate"],
+    anchor: "food.voice",
     text: [
       "### Adding food by voice",
       "1. In **Add Meal**, tap the mic in the Food name field.",

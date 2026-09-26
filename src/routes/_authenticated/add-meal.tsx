@@ -58,6 +58,7 @@ import {
   type MacroEstimate,
 } from "@/lib/food-estimate";
 import { validateItem } from "@/lib/food/validate";
+import { anchorProps } from "@/lib/halku/anchors";
 import { playSaveTone, triggerHaptic } from "@/lib/celebrationEffects";
 import { MEAL_CATEGORIES, round } from "@/lib/nutrition";
 import { useSaveFeedback } from "@/lib/useSaveFeedback";
@@ -948,6 +949,7 @@ function AddMeal() {
             variant="secondary"
             className="mt-3 w-full"
             onClick={estimateMacros}
+            {...anchorProps("food.estimate")}
             disabled={estimating}
           >
             <Sparkles className="size-4" />{" "}
@@ -969,7 +971,7 @@ function AddMeal() {
               <p className="text-primary">
                 {estimate.note} (confidence ≈ {Math.round(estimate.confidence * 100)}%)
               </p>
-              {estimate.needsReview ? (
+              {estimate.needsReview && items.some((i) => (i.flags?.length ?? 0) > 0) ? (
                 <p
                   role="status"
                   className="flex items-start gap-1 text-amber-700 dark:text-amber-300"
@@ -994,6 +996,7 @@ function AddMeal() {
                     size="sm"
                     className="h-6 gap-1 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
                     onClick={() => setScannerOpen(true)}
+                    {...anchorProps("food.scan-barcode")}
                   >
                     <ScanLine className="size-3" aria-hidden="true" />
                     Scan barcode
@@ -1017,6 +1020,7 @@ function AddMeal() {
             <div className="relative">
               <Input
                 id="name"
+                {...anchorProps("food.name-field")}
                 required
                 placeholder="Grilled chicken breast + rice + salad"
                 value={form.name}
@@ -1027,6 +1031,7 @@ function AddMeal() {
                 <button
                   type="button"
                   onClick={() => (speech.listening ? speech.stop() : speech.start())}
+                  {...anchorProps("food.voice")}
                   aria-label={speech.listening ? "Stop voice input" : "Add food by voice"}
                   aria-pressed={speech.listening}
                   className={`absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 transition-colors ${
@@ -1181,6 +1186,7 @@ function AddMeal() {
             ) : null}
             <Button
               type="submit"
+              {...anchorProps("food.save-meal")}
               className={`w-full transition-transform ${justSaved ? "scale-[1.03]" : ""}`}
               disabled={saving || justSaved}
             >

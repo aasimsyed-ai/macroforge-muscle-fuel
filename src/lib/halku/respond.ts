@@ -535,11 +535,13 @@ export function buildHalkuAnswer(intent: HalkuIntent, data: HalkuKnownData): Hal
       return {
         grounded: false,
         text: "**Add Meal** → enter the food name and serving → review the estimated calories/macros (edit any of them if they're off) → **Save**. It's added to today's log immediately.",
+        anchor: "food.save-meal",
       };
     case "how_to_add_set":
       return {
         grounded: false,
-        text: "Tap **Add set** below that exercise's existing sets. The new set starts pre-filled with your last set's weight and rest time, so you usually only need to adjust reps.",
+        text: "Tap **Add set** below that exercise's existing sets. The new set starts pre-filled with your last set's reps, weight and rest time, so you only need to change what's different.",
+        anchor: "workout.add-set",
       };
     case "how_to_collapse_exercise":
       return {
@@ -549,7 +551,8 @@ export function buildHalkuAnswer(intent: HalkuIntent, data: HalkuKnownData): Hal
     case "how_to_scan_barcode":
       return {
         grounded: false,
-        text: "In **Add Meal**, tap **Scan barcode**, then point your camera at the package's barcode. It looks up that exact product's label nutrition instead of estimating it — you can still edit any number before you save.",
+        text: "In **Add Meal**, tap **Scan barcode**, then point your camera at the package's barcode. It looks up that product's label nutrition (from Open Food Facts, a community database) instead of estimating it — check it against the pack, and you can still edit any number before you save.",
+        anchor: "food.scan-barcode",
       };
     case "fatigue_guidance":
       return {
@@ -634,7 +637,13 @@ export function buildHalkuAnswer(intent: HalkuIntent, data: HalkuKnownData): Hal
     }
     case "topic": {
       const topic = intent.topicId ? topicById(intent.topicId) : undefined;
-      if (topic) return { grounded: false, text: topic.text };
+      if (topic) {
+        return {
+          grounded: false,
+          text: topic.text,
+          ...(topic.anchor ? { anchor: topic.anchor } : {}),
+        };
+      }
       return buildHalkuAnswer({ kind: "unknown" }, data);
     }
     case "greeting":

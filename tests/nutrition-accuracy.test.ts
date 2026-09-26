@@ -399,6 +399,19 @@ describe("root-cause regressions (each was a real defect)", () => {
     expect(est("boiled chicken").items?.map((i) => i.foodId)).toEqual(["chicken_meat"]);
   });
 
+  it("input that is only separators yields no estimate (no phantom 0 kcal result)", () => {
+    expect(estimateFromText("+", null)).toBeNull();
+    expect(estimateFromText(" , ; ", null)).toBeNull();
+    expect(estimateFromText("   ", null)).toBeNull();
+  });
+
+  it("an absurd portion asks for review, not just a quiet warning", () => {
+    const r = est("10000 g rice");
+    expect(r.items?.[0]?.flags?.map((f) => f.code)).toContain("implausible_portion");
+    expect(r.needsReview).toBe(true);
+    expect(est("150 g cooked rice").needsReview).toBe(false);
+  });
+
   it("'eggplant' is not an egg", () => {
     expect(est("eggplant").items?.map((i) => i.foodId)).toEqual(["eggplant"]);
   });
