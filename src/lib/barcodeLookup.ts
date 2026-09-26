@@ -1,4 +1,5 @@
 import type { EstimatedItem } from "@/lib/food-estimate";
+import { validateItem } from "@/lib/food/validate";
 
 /**
  * Looks up a scanned barcode against Open Food Facts — a free, public,
@@ -23,7 +24,7 @@ interface OffNutriments {
 
 interface OffProduct {
   product_name?: string;
-  serving_quantity?: number;
+  serving_quantity?: number | string;
   nutriments?: OffNutriments;
 }
 
@@ -59,10 +60,13 @@ export async function lookupBarcodeProduct(code: string): Promise<EstimatedItem 
 
     // Prefer the product's own per-serving figures when Open Food Facts has
     // them; otherwise scale the per-100g figures by the declared serving
-    // size (or just report per-100g if no serving size is on file at all).
-    const servingGrams =
-      product.serving_quantity && product.serving_quantity > 0 ? product.serving_quantity : null;
-    const factor = servingGrams ? servingGrams / 100 : 1;
+    // size. With no serving size on file the item is the 100 g the figures
+    // describe — stated as such, never presented as an unlabelled serving.
+    // (serving_quantity can arrive as a string, so coerce before trusting it.)
+    const declared = Number(product.serving_quantity);
+    const servingGrams = Number.isFinite(declared) && declared > 0 ? declared : null;
+    const basisGrams = servingGrams ?? 100;
+    const factor = basisGrams / 100;
 
     const calories =
       nutriments["energy-kcal_serving"] ?? (nutriments["energy-kcal_100g"] ?? 0) * factor;
@@ -72,15 +76,32 @@ export async function lookupBarcodeProduct(code: string): Promise<EstimatedItem 
 
     if (calories <= 0 && protein <= 0 && carbs <= 0 && fat <= 0) return null;
 
-    return {
+    const item: EstimatedItem = {
       label: name,
-      grams: servingGrams,
+      grams: basisGrams,
       calories: Math.round(calories),
       protein: round1(protein),
       carbs: round1(carbs),
       fat: round1(fat),
       recognised: true,
       exact: true,
+      provenance: "label",
+      sourceNote:
+        "Open Food Facts (community-maintained product database) — check against the pack",
+      portionBasis: servingGrams ? "explicit" : "assumed",
+      assumptions: [
+        servingGrams
+          ? `Per the ${servingGrams} g serving declared for this product`
+          : "No serving size on file — these are the per-100 g figures; change them if you ate a different amount",
+      ],
+    };
+    // Community data has typos (e.g. kcal and kJ swapped) — flag what is physically impossible.
+    const flags = validateItem(item);
+    const hasError = flags.some((f) => f.severity === "error");
+    return {
+      ...item,
+      ...(flags.length ? { flags } : {}),
+      confidence: hasError ? 0.3 : servingGrams ? 0.9 : 0.7,
     };
   } catch {
     return null;

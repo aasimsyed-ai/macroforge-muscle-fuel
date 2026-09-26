@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useDeleteMeal, useMealPhotoUrl, type Meal } from "@/lib/data";
+import { describeEstimateSource } from "@/lib/food-estimate";
 import { categoryLabel } from "@/lib/nutrition";
 
 function MealPhoto({ path }: { path: string | null }) {
@@ -59,7 +60,14 @@ export function MealList({ meals }: { meals: Meal[] }) {
             <div className="flex flex-wrap items-center gap-2">
               <p className="truncate font-semibold">{m.name}</p>
               <Badge variant="secondary">{categoryLabel(m.category)}</Badge>
-              {m.is_estimate ? <Badge variant="outline">Approximate</Badge> : null}
+              {m.is_estimate ? (
+                <Badge
+                  variant="outline"
+                  title={describeEstimateSource(m.estimate_source) ?? undefined}
+                >
+                  Approximate
+                </Badge>
+              ) : null}
               {m.is_demo ? <Badge variant="outline">Demo</Badge> : null}
             </div>
             <p className="num mt-1 text-sm text-muted-foreground">

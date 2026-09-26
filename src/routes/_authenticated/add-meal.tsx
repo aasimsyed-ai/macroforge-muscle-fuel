@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { format } from "date-fns";
 import {
+  AlertCircle,
   Bookmark,
   Camera,
   Check,
@@ -51,10 +52,12 @@ import {
 import {
   analyzeMeal,
   parseServingToGrams,
+  provenanceLabel,
   SERVING_SUGGESTIONS,
   type EstimatedItem,
   type MacroEstimate,
 } from "@/lib/food-estimate";
+import { validateItem } from "@/lib/food/validate";
 import { playSaveTone, triggerHaptic } from "@/lib/celebrationEffects";
 import { MEAL_CATEGORIES, round } from "@/lib/nutrition";
 import { useSaveFeedback } from "@/lib/useSaveFeedback";
@@ -163,7 +166,58 @@ function FrequentFoodChip({ food, onClick }: { food: FrequentFood; onClick: () =
   );
 }
 
-/** One row of the itemized review list — shown only when a meal has more than one recognised food. */
+/**
+ * Where an item's numbers came from: a provenance badge, any warnings (always
+ * visible), and the source + assumptions behind them (one tap away).
+ */
+function ItemDetails({ item, className = "" }: { item: EstimatedItem; className?: string }) {
+  const provenance = item.edited ? "user" : item.provenance;
+  const flags = item.flags ?? [];
+  const assumptions = item.assumptions ?? [];
+  if (!provenance && flags.length === 0) return null;
+  return (
+    <div className={`space-y-1 text-[10px] text-muted-foreground ${className}`}>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {provenance ? (
+          <span
+            className={`rounded-full border px-1.5 py-0.5 font-medium ${
+              provenance === "none" ? "border-destructive/50 text-destructive" : "border-border"
+            }`}
+          >
+            {provenanceLabel(provenance)}
+          </span>
+        ) : null}
+        {item.confidence != null && provenance !== "none" && provenance !== "user" ? (
+          <span>confidence ≈ {Math.round(item.confidence * 100)}%</span>
+        ) : null}
+      </div>
+      {flags.map((flag) => (
+        <p
+          key={flag.code}
+          className={`flex items-start gap-1 ${
+            flag.severity === "error" ? "text-destructive" : "text-amber-700 dark:text-amber-300"
+          }`}
+        >
+          <AlertCircle className="mt-px size-3 shrink-0" aria-hidden="true" />
+          <span>{flag.message}</span>
+        </p>
+      ))}
+      {item.sourceNote || assumptions.length > 0 ? (
+        <details>
+          <summary className="cursor-pointer select-none">Where these numbers come from</summary>
+          <ul className="mt-1 list-disc space-y-0.5 pl-4">
+            {item.sourceNote ? <li>{item.sourceNote}</li> : null}
+            {assumptions.map((a) => (
+              <li key={a}>{a}</li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+/** One row of the itemized review list — shown when a meal has several foods, or one that needs attention. */
 function ItemRow({
   item,
   expanded,
@@ -202,7 +256,9 @@ function ItemRow({
           />
           {item.grams != null || item.exact ? (
             <span className="block px-1 text-[10px] text-muted-foreground">
-              {item.exact ? "from label" : `~${item.grams} g`}
+              {item.exact
+                ? `from label${item.grams != null ? ` · ${item.grams} g` : ""}`
+                : `~${item.grams} g`}
             </span>
           ) : null}
         </div>
@@ -269,6 +325,7 @@ function ItemRow({
           </div>
         </div>
       ) : null}
+      <ItemDetails item={item} className="mt-1.5 pl-5" />
     </div>
   );
 }
@@ -301,6 +358,12 @@ function AddMeal() {
   const [existingPhotoPath, setExistingPhotoPath] = useState<string | null>(null);
   const existingPhoto = useMealPhotoUrl(existingPhotoPath);
   const [estimate, setEstimate] = useState<MacroEstimate | null>(null);
+  // Provenance of numbers replayed from a Recent/Saved meal — they were an
+  // estimate when first logged and must not be re-labelled as exact on reuse.
+  const [carried, setCarried] = useState<{
+    is_estimate: boolean;
+    estimate_source: string | null;
+  } | null>(null);
   const [estimating, setEstimating] = useState(false);
   // Per-item breakdown of the current estimate, editable before saving. Only
   // shown when there's more than one recognised food (see render below).
@@ -393,6 +456,7 @@ function AddMeal() {
     setPhoto(null);
     setPhotoUrl(null);
     setEstimate(null);
+    setCarried(null);
     setItems([]);
     setExpandedItem(null);
     setSyncedId(targetId);
@@ -424,6 +488,7 @@ function AddMeal() {
     }));
     setTouched(ALL_MACROS_TOUCHED);
     setEstimate(null);
+    setCarried({ is_estimate: t.is_estimate, estimate_source: t.estimate_source });
     setItems([]);
     setExpandedItem(null);
     toast.success(`Loaded "${t.name}" — edit anything before saving`);
@@ -454,8 +519,8 @@ function AddMeal() {
         protein_g: Number(form.protein_g || 0),
         carbs_g: Number(form.carbs_g || 0),
         fat_g: Number(form.fat_g || 0),
-        is_estimate: estimate !== null,
-        estimate_source: estimate?.source ?? null,
+        is_estimate: estimate !== null || (carried?.is_estimate ?? false),
+        estimate_source: estimate?.source ?? carried?.estimate_source ?? null,
       });
       toast.success(`Saved "${form.name.trim()}" for quick logging later`);
     } catch (err) {
@@ -499,6 +564,7 @@ function AddMeal() {
         const allTouched = t.calories && t.protein_g && t.carbs_g && t.fat_g;
         if (!allTouched) {
           setEstimate(result);
+          setCarried(null);
           setItems(result.items ?? []);
           setExpandedItem(null);
         }
@@ -525,6 +591,14 @@ function AddMeal() {
       toast.error("Add a food name (or a photo plus a name) to estimate macros.");
       return;
     }
+    // A manual re-estimate replaces hand-typed numbers — never do that silently.
+    const hasEdits = Object.values(touchedRef.current).some(Boolean) || items.some((i) => i.edited);
+    if (
+      hasEdits &&
+      !window.confirm("Re-estimating will replace the numbers you edited. Continue?")
+    ) {
+      return;
+    }
     setEstimating(true);
     try {
       const result = await analyzeMeal({
@@ -537,9 +611,10 @@ function AddMeal() {
         return;
       }
       setEstimate(result);
+      setCarried(null);
       setItems(result.items ?? []);
       setExpandedItem(null);
-      // Manual re-estimate overrides everything, including hand-edited fields.
+      // Manual re-estimate overrides everything, including hand-edited fields (confirmed above).
       setTouched(NO_MACROS_TOUCHED);
       setDescEdited(true);
       setForm((s) => ({
@@ -580,7 +655,22 @@ function AddMeal() {
 
   function updateItem(index: number, patch: Partial<EstimatedItem>) {
     setItems((current) => {
-      const next = current.map((it, i) => (i === index ? { ...it, ...patch } : it));
+      const next = current.map((it, i) => {
+        if (i !== index) return it;
+        const changedNumbers =
+          patch.calories !== undefined ||
+          patch.protein !== undefined ||
+          patch.carbs !== undefined ||
+          patch.fat !== undefined;
+        const merged: EstimatedItem = { ...it, ...patch };
+        if (!changedNumbers) return merged;
+        // The user's number now stands in for the source's: mark it, and re-run
+        // the sanity checks on what they typed instead of keeping stale warnings.
+        const { flags: _stale, ...rest } = merged;
+        const edited: EstimatedItem = { ...rest, edited: true, provenance: "user" };
+        const flags = validateItem(edited);
+        return flags.length ? { ...edited, flags } : edited;
+      });
       syncTotalsFromItems(next);
       return next;
     });
@@ -644,6 +734,26 @@ function AddMeal() {
       }
     }
 
+    // Foods with no nutrition data are left out of the totals rather than
+    // guessed. If that leaves the whole meal at zero, say so before saving.
+    const currentItems =
+      usedEstimate && usedEstimate !== estimate ? (usedEstimate.items ?? []) : items;
+    const unresolved = currentItems.filter((i) => i.provenance === "none");
+    const allZero =
+      Number(calories || 0) === 0 &&
+      Number(protein_g || 0) === 0 &&
+      Number(carbs_g || 0) === 0 &&
+      Number(fat_g || 0) === 0;
+    if (
+      unresolved.length > 0 &&
+      allZero &&
+      !window.confirm(
+        `No nutrition data was found for ${unresolved.map((i) => `"${i.label}"`).join(", ")}, so this meal would be saved with 0 calories. Save anyway?`,
+      )
+    ) {
+      return;
+    }
+
     const fields = {
       name: form.name.trim(),
       category: form.category,
@@ -654,8 +764,8 @@ function AddMeal() {
       fat_g: Number(fat_g || 0),
       notes: form.notes.trim() || null,
       eaten_at: new Date(form.eaten_at).toISOString(),
-      is_estimate: usedEstimate !== null,
-      estimate_source: usedEstimate?.source ?? null,
+      is_estimate: usedEstimate !== null || (carried?.is_estimate ?? false),
+      estimate_source: usedEstimate?.source ?? carried?.estimate_source ?? null,
     };
 
     try {
@@ -687,6 +797,11 @@ function AddMeal() {
   const autoFilled = estimate !== null && !Object.values(touched).every(Boolean);
   const previewUrl = photoUrl ?? (existingPhotoPath ? (existingPhoto.data ?? null) : null);
   const saving = create.isPending || update.isPending;
+  // The per-item list shows for several foods, or when the one food has no data
+  // (so the user can see and fill it in); a single matched food gets a compact
+  // source line instead of a one-row list plus an identical total.
+  const showItemList = items.length > 1 || items.some((i) => i.provenance === "none");
+  const soloItem = items.length === 1 ? items[0] : undefined;
   const recentMeals = recent.data ?? [];
   const frequentFoods = frequent.data ?? [];
   const savedMeals = saved.data ?? [];
@@ -844,14 +959,26 @@ function AddMeal() {
           </Button>
           <p className="mt-3 rounded-lg bg-secondary p-3 text-xs text-muted-foreground">
             Calories and macros fill in <strong>automatically</strong> from your food name and
-            serving size — or from a <strong>photo</strong> when photo analysis is enabled. They are{" "}
+            serving size, using a reference food table and typical portions — or from a{" "}
+            <strong>photo</strong> when photo analysis is enabled. They are{" "}
             <strong>approximate</strong>, not measured — edit any number and your value is kept.
             Separate several foods with <strong>+</strong> and each is added up.
           </p>
           {estimate ? (
-            <p className="mt-2 text-xs text-primary">
-              {estimate.note} (confidence ≈ {Math.round(estimate.confidence * 100)}%)
-            </p>
+            <div className="mt-2 space-y-1 text-xs">
+              <p className="text-primary">
+                {estimate.note} (confidence ≈ {Math.round(estimate.confidence * 100)}%)
+              </p>
+              {estimate.needsReview ? (
+                <p
+                  role="status"
+                  className="flex items-start gap-1 text-amber-700 dark:text-amber-300"
+                >
+                  <AlertCircle className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+                  Please review the highlighted items before saving.
+                </p>
+              ) : null}
+            </div>
           ) : null}
         </section>
 
@@ -974,7 +1101,12 @@ function AddMeal() {
                 </span>
               ) : null}
             </div>
-            {items.length > 1 ? (
+            {items.length === 1 && soloItem && !showItemList ? (
+              <div className="rounded-lg border border-dashed border-border p-2.5">
+                <ItemDetails item={soloItem} />
+              </div>
+            ) : null}
+            {showItemList ? (
               <div className="space-y-1.5 rounded-lg border border-dashed border-border p-2.5">
                 {items.map((item, index) => (
                   <ItemRow
@@ -991,7 +1123,7 @@ function AddMeal() {
                 </p>
               </div>
             ) : null}
-            {items.length > 1 ? (
+            {showItemList ? (
               <p className="text-xs font-semibold text-muted-foreground">Total</p>
             ) : null}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
